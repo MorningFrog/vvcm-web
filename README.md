@@ -9,7 +9,7 @@ VVCM Web is a React, TypeScript, and Vite visual test bench for the `@morningfro
 * Edit deformable sheet vertices and robot positions in coordinate tables.
 * Drag sheet vertices and robot positions directly on an SVG coordinate canvas.
 * Pan and zoom the coordinate canvas manually, with a fit-view control to reframe the current geometry.
-* Inspect robot ground points `r_i`, elevated hold points `p_i`, FK object points `po`, and taut `p_i-po` links in a Z-up Three.js 3D view.
+* Inspect robot ground points `r#`, elevated `p# hold point` markers, FK object points `po`, and taut `p#-po` links in a Z-up Three.js 3D view.
 * Import, edit, sync, and copy point arrays as JSON.
 * Copy the full solver configuration, including `robotCount`, `holdHeight`, `sheet`, and `formation`.
 * Run `VvcmFk` in the browser and display candidate solution counts, stability labels, object poses, virtual object points, and taut cable indices.
@@ -66,7 +66,7 @@ Use the index selector in the header to choose 0-based or 1-based display labels
 
 Use the edit mode control and point tables to choose whether you are editing sheet vertices or robot positions. Drag a point marker or its label to move that point. Drag empty canvas space to pan the view, use the mouse wheel or the `+` and `-` controls to zoom, and use `Fit` to reframe the current geometry and visible FK results.
 
-The 3D view uses the same VVCM coordinates directly with Z as the vertical axis. Each robot ground point is shown as `r_i=(x,y,0)`, each elevated hold point is shown as `p_i=(x,y,holdHeight)`, and each visible FK object point is shown as `po=(x,y,z)`. Orbit, pan, and zoom the 3D view with the mouse or touchpad, and use `Reset` to fit the current scene. 3D labels scale with the view to stay readable, and camera movement stops immediately when input ends. In single-solution mode the selected solution's taut cables are drawn from `p_i` to `po`; in all-solutions mode every visible `po` is shown with that solution's taut `p_i-po` links.
+The 3D view uses the same VVCM coordinates directly with Z as the vertical axis. The legend describes robot ground points as `r# ground`, elevated hold points as `p# hold point`, visible FK object points as `po object`, and taut links as `taut p#-po`; in-scene point labels use the active index base, such as `r0`/`p0` or `r1`/`p1`. Orbit, pan, and zoom the 3D view with the mouse or touchpad, and use `Reset` to fit the current scene. 3D labels scale with the view to stay readable, and camera movement stops immediately when input ends. In single-solution mode the selected solution's taut cables are drawn from the relevant `p#` hold point to `po`; in all-solutions mode every visible `po` is shown with that solution's taut `p#-po` links.
 
 The point tables provide precise numeric editing. The JSON editors accept arrays of `[x, y]` tuples or `{ "x": number, "y": number }` objects. Applying a JSON editor also updates the shared robot count to match the number of parsed points.
 

@@ -696,12 +696,6 @@ function App() {
       })),
     [displayedSolutionEntries],
   )
-  const sceneSolutionMessage =
-    solveState.status === 'ok'
-      ? indexedSolutions.length
-        ? null
-        : t.results.noSolutions
-      : solveState.message
   const showTautCableSegments = displayedSolutionEntries.length === 1
   const fkResultJson = useMemo(() => fkResultToJson(solveState), [solveState])
 
@@ -1278,11 +1272,8 @@ function App() {
         <section className="visual-column">
           <section className="canvas-panel">
             <div className="panel-heading canvas-heading">
-              <div>
+              <div className="canvas-heading-main">
                 <h2>{t.canvas.title}</h2>
-                <span>{t.canvas.currentSelection(selectedLabel)}</span>
-              </div>
-              <div className="canvas-heading-actions">
                 <div
                   className="canvas-tools"
                   role="group"
@@ -1312,16 +1303,16 @@ function App() {
                     {t.canvas.fitView}
                   </button>
                 </div>
-                <div className="legend" aria-label={t.canvas.legendAriaLabel}>
-                  <span className="legend-item sheet">{t.canvas.sheetLegend}</span>
-                  <span className="legend-item robot">{t.canvas.robotLegend}</span>
-                  <span className="legend-item stable-solution">
-                    {t.canvas.stableSolutionLegend}
-                  </span>
-                  <span className="legend-item unstable-solution">
-                    {t.canvas.unstableSolutionLegend}
-                  </span>
-                </div>
+              </div>
+              <div className="legend" aria-label={t.canvas.legendAriaLabel}>
+                <span className="legend-item sheet">{t.canvas.sheetLegend}</span>
+                <span className="legend-item robot">{t.canvas.robotLegend}</span>
+                <span className="legend-item stable-solution">
+                  {t.canvas.stableSolutionLegend}
+                </span>
+                <span className="legend-item unstable-solution">
+                  {t.canvas.unstableSolutionLegend}
+                </span>
               </div>
             </div>
             <svg
@@ -1592,7 +1583,6 @@ function App() {
             indexBase={indexBase}
             labels={t.scene3d}
             robots={robots}
-            solutionMessage={sceneSolutionMessage}
             visibleSolutions={visibleSceneSolutions}
           />
         </section>

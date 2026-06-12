@@ -29,7 +29,6 @@ export type RobotSceneSolutionEntry = {
 
 export type RobotScene3DLabels = {
   ariaLabel: string
-  emptyState: string
   groundRobotLegend: string
   holdPointLegend: string
   legendAriaLabel: string
@@ -45,7 +44,6 @@ type RobotScene3DProps = {
   indexBase: IndexBase
   labels: RobotScene3DLabels
   robots: Point2[]
-  solutionMessage: string | null
   visibleSolutions: RobotSceneSolutionEntry[]
 }
 
@@ -316,7 +314,6 @@ export function RobotScene3D({
   indexBase,
   labels,
   robots,
-  solutionMessage,
   visibleSolutions,
 }: RobotScene3DProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -527,11 +524,8 @@ export function RobotScene3D({
   return (
     <section className="scene-panel">
       <div className="panel-heading canvas-heading scene-heading">
-        <div>
+        <div className="canvas-heading-main">
           <h2>{labels.title}</h2>
-          <span>{solutionMessage ?? labels.emptyState}</span>
-        </div>
-        <div className="canvas-heading-actions">
           <div className="canvas-tools" role="group" aria-label={labels.ariaLabel}>
             <button
               type="button"
@@ -541,12 +535,12 @@ export function RobotScene3D({
               {labels.resetView}
             </button>
           </div>
-          <div className="legend scene-legend" aria-label={labels.legendAriaLabel}>
-            <span className="legend-item ground-robot">{labels.groundRobotLegend}</span>
-            <span className="legend-item hold-point">{labels.holdPointLegend}</span>
-            <span className="legend-item stable-solution">{labels.objectLegend}</span>
-            <span className="legend-item taut-line">{labels.tautLineLegend}</span>
-          </div>
+        </div>
+        <div className="legend scene-legend" aria-label={labels.legendAriaLabel}>
+          <span className="legend-item ground-robot">{labels.groundRobotLegend}</span>
+          <span className="legend-item hold-point">{labels.holdPointLegend}</span>
+          <span className="legend-item stable-solution">{labels.objectLegend}</span>
+          <span className="legend-item taut-line">{labels.tautLineLegend}</span>
         </div>
       </div>
       <div ref={containerRef} className="robot-scene-frame">
