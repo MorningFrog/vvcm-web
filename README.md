@@ -12,7 +12,7 @@ VVCM Web is a React, TypeScript, and Vite visual test bench for the `@morningfro
 * Import, edit, sync, and copy point arrays as JSON.
 * Copy the full solver configuration, including `robotCount`, `holdHeight`, `sheet`, and `formation`.
 * Run `VvcmFk` in the browser and display candidate solution counts, stability labels, object poses, virtual object points, and taut cable indices.
-* Visualize the sheet polygon, robot formation, cable reference lines, single-solution taut `vi-vo` and `ri-ro` segments, and selected or all FK solution positions.
+* Visualize the sheet polygon, robot formation, cable reference lines, single-solution taut `vi-vo` and `ri-ro` segments, and selected or all FK solution positions with matching solution colors in the canvas and FK result list.
 * Switch the interface language between Simplified Chinese and English.
 
 ## Requirements

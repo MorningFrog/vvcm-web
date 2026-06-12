@@ -481,20 +481,20 @@ button:hover {
 }
 
 .object-marker.stable circle {
-  fill: #2f7d46;
+  fill: var(--solution-color, #2f7d46);
 }
 
 .object-marker.unstable circle {
-  fill: #b12d36;
+  fill: var(--solution-color, #b12d36);
   stroke-dasharray: 5 4;
 }
 
 .object-marker.virtual circle {
-  fill: #4d62c7;
+  fill: var(--solution-color, #4d62c7);
 }
 
 .object-marker.virtual.unstable circle {
-  fill: #4d62c7;
+  fill: var(--solution-color, #4d62c7);
   stroke-dasharray: 5 4;
 }
 
@@ -579,7 +579,7 @@ button:hover {
 
 .solution-row {
   display: grid;
-  grid-template-columns: 44px 84px minmax(0, 1fr) minmax(0, 0.75fr) minmax(120px, auto);
+  grid-template-columns: 16px 44px 84px minmax(0, 1fr) minmax(0, 0.75fr) minmax(120px, auto);
   gap: 10px;
   align-items: center;
   width: 100%;
@@ -596,8 +596,18 @@ button:hover {
 }
 
 .solution-row.shown {
-  border-color: #007d7a;
+  border-color: var(--solution-color, #007d7a);
   background: #eef8f6;
+}
+
+.solution-color-dot {
+  width: 12px;
+  height: 12px;
+  justify-self: center;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: var(--solution-color, #007d7a);
+  box-shadow: 0 0 0 1px rgba(20, 33, 36, 0.18);
 }
 
 .solution-index {

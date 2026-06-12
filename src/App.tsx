@@ -6,7 +6,6 @@ import {
   type Point2Input,
 } from '@morningfrog/vvcm-rs'
 import {
-  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -188,6 +187,27 @@ const CANVAS_METRIC_TARGETS = {
   objectRadius: 10,
   virtualObjectRadius: 9,
 } satisfies CanvasMetrics
+
+const SOLUTION_COLORS = [
+  '#2f7d46',
+  '#4d62c7',
+  '#c56a1a',
+  '#8a4db3',
+  '#b12d36',
+  '#007d7a',
+  '#a15c38',
+  '#4f6f36',
+  '#c24682',
+  '#5d6b7a',
+]
+
+const getSolutionColor = (index: number) =>
+  SOLUTION_COLORS[index % SOLUTION_COLORS.length]
+
+const solutionColorStyle = (index: number) =>
+  ({
+    '--solution-color': getSolutionColor(index),
+  }) as CSSProperties
 
 const scaleCanvasMetrics = (unitsPerPixel: number): CanvasMetrics => {
   const scale = (value: number) => round(value * unitsPerPixel, 2)
@@ -1297,7 +1317,10 @@ function App() {
                 const solutionState = solution.stable ? 'stable' : 'unstable'
 
                 return (
-                  <Fragment key={`object-${index}`}>
+                  <g
+                    key={`object-${index}`}
+                    style={solutionColorStyle(index)}
+                  >
                     <g className={`object-marker ${solutionState}`}>
                       <circle
                         cx={objectPoint.x}
@@ -1328,10 +1351,7 @@ function App() {
                           : t.results.unstableBadge}
                       </text>
                     </g>
-                    <g
-                      className={`object-marker virtual ${solutionState}`}
-                      key={`virtual-object-${index}`}
-                    >
+                    <g className={`object-marker virtual ${solutionState}`}>
                       <circle
                         cx={virtualPoint.x}
                         cy={virtualPoint.y}
@@ -1349,7 +1369,7 @@ function App() {
                         vo{index + 1}
                       </text>
                     </g>
-                  </Fragment>
+                  </g>
                 )
               })}
               <g className="sheet-points">
@@ -1508,11 +1528,16 @@ function App() {
                           type="button"
                           className={`solution-row ${shown ? 'shown' : ''}`}
                           key={`solution-${index}`}
+                          style={solutionColorStyle(index)}
                           onClick={() => {
                             setSelectedSolutionIndex(index)
                             setSolutionDisplayMode('single')
                           }}
                         >
+                          <span
+                            className="solution-color-dot"
+                            aria-hidden="true"
+                          />
                           <span className="solution-index">#{index + 1}</span>
                           <span
                             className={`solution-badge ${
