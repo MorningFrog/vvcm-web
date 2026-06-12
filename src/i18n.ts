@@ -8,7 +8,11 @@ export const translations = {
     header: {
       copyAllConfig: '复制全部配置',
       eyebrow: 'VVCM wasm visual test bench',
+      indexBaseAriaLabel: '显示索引基准',
+      indexBaseLabel: '索引',
+      oneBasedIndex: '1-based',
       title: 'VVCM 可视化测试台',
+      zeroBasedIndex: '0-based',
     },
     controls: {
       ariaLabel: '参数控制',
@@ -97,7 +101,11 @@ export const translations = {
     header: {
       copyAllConfig: 'Copy full config',
       eyebrow: 'VVCM wasm visual test bench',
+      indexBaseAriaLabel: 'Displayed index base',
+      indexBaseLabel: 'Index',
+      oneBasedIndex: '1-based',
       title: 'VVCM Visual Test Bench',
+      zeroBasedIndex: '0-based',
     },
     controls: {
       ariaLabel: 'Parameter controls',

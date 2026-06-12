@@ -35,6 +35,8 @@ type PointKind = 'sheet' | 'robots'
 
 type SolutionDisplayMode = 'single' | 'all'
 
+type IndexBase = 0 | 1
+
 type PointDragState = {
   type: 'point'
   kind: PointKind
@@ -145,6 +147,8 @@ const MIN_ROBOT_COUNT = 3
 const MAX_ROBOT_COUNT = 16
 const DEFAULT_ROBOT_COUNT = 4
 const DEFAULT_HOLD_HEIGHT = 1000
+const DEFAULT_INDEX_BASE: IndexBase = 1
+const INDEX_BASE_STORAGE_KEY = 'vvcm-web.index-base.v1'
 const EMPTY_SOLUTIONS: FkSolutionOutput[] = []
 
 class PointParseError extends Error {
@@ -259,6 +263,37 @@ const formatNumber = (value: number) => {
 
   return Number.isInteger(value) ? String(value) : String(round(value))
 }
+
+const getInitialIndexBase = (): IndexBase => {
+  try {
+    return window.localStorage.getItem(INDEX_BASE_STORAGE_KEY) === '0'
+      ? 0
+      : DEFAULT_INDEX_BASE
+  } catch {
+    return DEFAULT_INDEX_BASE
+  }
+}
+
+const storeIndexBase = (indexBase: IndexBase) => {
+  try {
+    window.localStorage.setItem(INDEX_BASE_STORAGE_KEY, String(indexBase))
+  } catch {
+    // Ignore storage failures; the selector still works for this session.
+  }
+}
+
+const displayIndex = (index: number, indexBase: IndexBase) => index + indexBase
+
+const pointLabel = (
+  kind: PointKind,
+  index: number,
+  indexBase: IndexBase,
+) => `${kind === 'sheet' ? 'v' : 'r'}${displayIndex(index, indexBase)}`
+
+const formatIndexList = (indices: readonly number[], indexBase: IndexBase) =>
+  indices.length
+    ? indices.map((index) => displayIndex(index, indexBase)).join(', ')
+    : '-'
 
 const toPointInput = (points: Point[]): Point2Input[] =>
   points.map((point) => [point.x, point.y] as const)
@@ -524,6 +559,9 @@ const formatStatusMessage = (status: StatusMessage, t: Messages) => {
 
 function App() {
   const [locale, setLocale] = useState<Locale>(() => getInitialLocale())
+  const [indexBase, setIndexBase] = useState<IndexBase>(() =>
+    getInitialIndexBase(),
+  )
   const [robotCount, setRobotCount] = useState(DEFAULT_ROBOT_COUNT)
   const [holdHeight, setHoldHeight] = useState(DEFAULT_HOLD_HEIGHT)
   const [sheet, setSheet] = useState<Point[]>(() =>
@@ -564,6 +602,10 @@ function App() {
     document.documentElement.lang = locale
     storeLocale(locale)
   }, [locale])
+
+  useEffect(() => {
+    storeIndexBase(indexBase)
+  }, [indexBase])
 
   const solveState = useMemo<SolveState>(() => {
     if (sheet.length !== robotCount || robots.length !== robotCount) {
@@ -666,7 +708,7 @@ function App() {
   )
   const selectedPoints = selectedKind === 'sheet' ? sheet : robots
   const selectedPoint = selectedPoints[selectedIndex] ?? selectedPoints[0]
-  const selectedLabel = `${selectedKind === 'sheet' ? 'v' : 'r'}${selectedIndex + 1}`
+  const selectedLabel = pointLabel(selectedKind, selectedIndex, indexBase)
 
   useEffect(() => {
     const svg = svgRef.current
@@ -998,6 +1040,29 @@ function App() {
           <h1>{t.header.title}</h1>
         </div>
         <div className="header-actions">
+          <div className="index-base-control">
+            <span>{t.header.indexBaseLabel}</span>
+            <div
+              className="index-base-toggle"
+              role="group"
+              aria-label={t.header.indexBaseAriaLabel}
+            >
+              <button
+                type="button"
+                className={indexBase === 0 ? 'active' : ''}
+                onClick={() => setIndexBase(0)}
+              >
+                {t.header.zeroBasedIndex}
+              </button>
+              <button
+                type="button"
+                className={indexBase === 1 ? 'active' : ''}
+                onClick={() => setIndexBase(1)}
+              >
+                {t.header.oneBasedIndex}
+              </button>
+            </div>
+          </div>
           <label className="language-select">
             <span>{t.language.selectorLabel}</span>
             <select
@@ -1109,7 +1174,8 @@ function App() {
           <PointTable
             pointHeader={t.controls.tablePointHeader}
             title={t.controls.sheetTableTitle}
-            prefix="S"
+            prefix="v"
+            indexBase={indexBase}
             kind="sheet"
             points={sheet}
             selectedKind={selectedKind}
@@ -1124,7 +1190,8 @@ function App() {
           <PointTable
             pointHeader={t.controls.tablePointHeader}
             title={t.controls.robotTableTitle}
-            prefix="R"
+            prefix="r"
+            indexBase={indexBase}
             kind="robots"
             points={robots}
             selectedKind={selectedKind}
@@ -1335,7 +1402,7 @@ function App() {
                           objectPoint.y + canvasMetrics.objectTitleYOffset
                         }
                       >
-                        po{index + 1}
+                        po{displayIndex(index, indexBase)}
                       </text>
                       <text
                         className="object-status"
@@ -1366,7 +1433,7 @@ function App() {
                           canvasMetrics.virtualObjectTitleYOffset
                         }
                       >
-                        vo{index + 1}
+                        vo{displayIndex(index, indexBase)}
                       </text>
                     </g>
                   </g>
@@ -1403,7 +1470,7 @@ function App() {
                         y={svgPoint.y + canvasMetrics.sheetLabelYOffset}
                         onPointerDown={handlePointPointerDown('sheet', index)}
                       >
-                        v{index + 1}
+                        {pointLabel('sheet', index, indexBase)}
                       </text>
                     </g>
                   )
@@ -1440,7 +1507,7 @@ function App() {
                         y={svgPoint.y + canvasMetrics.robotLabelYOffset}
                         onPointerDown={handlePointPointerDown('robots', index)}
                       >
-                        r{index + 1}
+                        {pointLabel('robots', index, indexBase)}
                       </text>
                     </g>
                   )
@@ -1506,7 +1573,10 @@ function App() {
 
                         return (
                           <option key={`solution-option-${index}`} value={index}>
-                            {t.results.solutionOption(index + 1, stateLabel)}
+                            {t.results.solutionOption(
+                              displayIndex(index, indexBase),
+                              stateLabel,
+                            )}
                           </option>
                         )
                       })}
@@ -1538,7 +1608,9 @@ function App() {
                             className="solution-color-dot"
                             aria-hidden="true"
                           />
-                          <span className="solution-index">#{index + 1}</span>
+                          <span className="solution-index">
+                            #{displayIndex(index, indexBase)}
+                          </span>
                           <span
                             className={`solution-badge ${
                               solution.stable ? 'stable' : 'unstable'
@@ -1556,7 +1628,7 @@ function App() {
                             {formatNumber(solution.vo.y)})
                           </code>
                           <code>
-                            taut=[{solution.tautCables.join(', ') || '-'}]
+                            taut=[{formatIndexList(solution.tautCables, indexBase)}]
                           </code>
                         </button>
                       )
@@ -1623,6 +1695,7 @@ function App() {
 
 type PointTableProps = {
   kind: PointKind
+  indexBase: IndexBase
   pointHeader: string
   points: Point[]
   prefix: string
@@ -1640,6 +1713,7 @@ type PointTableProps = {
 
 function PointTable({
   kind,
+  indexBase,
   pointHeader,
   points,
   prefix,
@@ -1674,7 +1748,7 @@ function PointTable({
                 className="point-select"
                 onClick={() => onSelect(index)}
               >
-                {prefix}{index + 1}
+                {prefix}{displayIndex(index, indexBase)}
               </button>
               <input
                 type="number"

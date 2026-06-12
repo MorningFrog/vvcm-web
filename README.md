@@ -13,6 +13,7 @@ VVCM Web is a React, TypeScript, and Vite visual test bench for the `@morningfro
 * Copy the full solver configuration, including `robotCount`, `holdHeight`, `sheet`, and `formation`.
 * Run `VvcmFk` in the browser and display candidate solution counts, stability labels, object poses, virtual object points, and taut cable indices.
 * Visualize the sheet polygon, robot formation, cable reference lines, single-solution taut `vi-vo` and `ri-ro` segments, and selected or all FK solution positions with matching solution colors in the canvas and FK result list.
+* Switch displayed indices between 0-based and 1-based labels for points, FK solutions, object markers, and taut cable lists.
 * Switch the interface language between Simplified Chinese and English.
 
 ## Requirements
@@ -57,6 +58,8 @@ npm run lint
 Use the parameter panel to set the robot count and hold height. The robot count is clamped to the supported UI range and keeps the sheet vertex count and robot position count aligned.
 
 The default interface language is English. Use the language selector in the header to switch between English and Simplified Chinese. The selected language is saved in local browser storage and reused on the next visit.
+
+Use the index selector in the header to choose 0-based or 1-based display labels. The setting is saved in local browser storage and keeps sheet vertex labels, robot labels, FK solution labels, object marker labels, and taut cable lists consistent.
 
 Use the edit mode control and point tables to choose whether you are editing sheet vertices or robot positions. Drag a point marker or its label to move that point. Drag empty canvas space to pan the view, use the mouse wheel or the `+` and `-` controls to zoom, and use `Fit` to reframe the current geometry and visible FK results.
 
