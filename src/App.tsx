@@ -1,4 +1,12 @@
 import {
+  VvcmFk,
+  version,
+  type FkSolutionOutput,
+  type FkSolutionsOutput,
+  type Point2Input,
+} from '@morningfrog/vvcm-rs'
+import {
+  Fragment,
   useEffect,
   useMemo,
   useRef,
@@ -6,13 +14,6 @@ import {
   type CSSProperties,
   type PointerEvent,
 } from 'react'
-import {
-  VvcmFk,
-  version,
-  type FkSolutionOutput,
-  type FkSolutionsOutput,
-  type Point2Input,
-} from '@morningfrog/vvcm-rs'
 import './App.css'
 import {
   getInitialLocale,
@@ -78,6 +79,7 @@ type CanvasTextMetrics = {
   objectLabelXOffset: number
   objectTitleYOffset: number
   objectStatusYOffset: number
+  virtualObjectTitleYOffset: number
 }
 
 type StatusMessage =
@@ -145,12 +147,13 @@ const CANVAS_TEXT_TARGETS = {
   labelSize: 16,
   statusSize: 13,
   labelStroke: 3,
-  pointLabelXOffset: 12,
-  sheetLabelYOffset: -10,
-  robotLabelYOffset: 21,
-  objectLabelXOffset: 16,
-  objectTitleYOffset: -14,
+  pointLabelXOffset: 8,
+  sheetLabelYOffset: -7,
+  robotLabelYOffset: 16,
+  objectLabelXOffset: 11,
+  objectTitleYOffset: -11,
   objectStatusYOffset: 4,
+  virtualObjectTitleYOffset: 4,
 } satisfies CanvasTextMetrics
 
 const scaleCanvasTextMetrics = (
@@ -168,6 +171,9 @@ const scaleCanvasTextMetrics = (
     objectLabelXOffset: scale(CANVAS_TEXT_TARGETS.objectLabelXOffset),
     objectTitleYOffset: scale(CANVAS_TEXT_TARGETS.objectTitleYOffset),
     objectStatusYOffset: scale(CANVAS_TEXT_TARGETS.objectStatusYOffset),
+    virtualObjectTitleYOffset: scale(
+      CANVAS_TEXT_TARGETS.virtualObjectTitleYOffset,
+    ),
   }
 }
 
@@ -207,7 +213,7 @@ const defaultSheet4: Point[] = [
   { x: -316.1, y: -421.9 },
   { x: 803.4, y: -384.1 },
   { x: 746.1, y: 712.8 },
-  { x: -367.3, y: 664.2 },
+  { x: -201.7, y: 390.8 },
 ]
 
 const defaultRobots4: Point[] = [
@@ -538,14 +544,18 @@ function App() {
 
     return selectedSolutionEntry ? [selectedSolutionEntry] : []
   }, [indexedSolutions, selectedSolutionEntry, solutionDisplayMode])
+  const showTautCableSegments = displayedSolutionEntries.length === 1
 
   const canvasPoints = useMemo(() => {
     const points = [...sheet, ...robots]
     points.push(
-      ...displayedSolutionEntries.map(({ solution }) => ({
-        x: solution.po.x,
-        y: solution.po.y,
-      })),
+      ...displayedSolutionEntries.flatMap(({ solution }) => [
+        {
+          x: solution.po.x,
+          y: solution.po.y,
+        },
+        solution.vo,
+      ]),
     )
 
     return points
@@ -566,11 +576,6 @@ function App() {
   const selectedPoints = selectedKind === 'sheet' ? sheet : robots
   const selectedPoint = selectedPoints[selectedIndex] ?? selectedPoints[0]
   const selectedLabel = `${selectedKind === 'sheet' ? 'v' : 'r'}${selectedIndex + 1}`
-  const tautCables = new Set(
-    displayedSolutionEntries.flatMap(
-      ({ solution }) => solution.tautCables,
-    ),
-  )
 
   useEffect(() => {
     const svg = svgRef.current
@@ -1059,7 +1064,6 @@ function App() {
                   return (
                     <line
                       key={`cable-${index}`}
-                      className={tautCables.has(index) ? 'taut' : ''}
                       x1={sheetSvg.x}
                       y1={sheetSvg.y}
                       x2={robotSvg.x}
@@ -1068,40 +1072,95 @@ function App() {
                   )
                 })}
               </g>
+              {showTautCableSegments && (
+                <g className="taut-cable-lines">
+                  {displayedSolutionEntries.flatMap(({ index, solution }) => {
+                    const voSvg = toSvgPoint(solution.vo)
+                    const roSvg = toSvgPoint(solution.po)
+
+                    return solution.tautCables.flatMap((cableIndex) => {
+                      const sheetPoint = sheet[cableIndex]
+                      const robotPoint = robots[cableIndex]
+                      if (!sheetPoint || !robotPoint) {
+                        return []
+                      }
+
+                      const sheetSvg = toSvgPoint(sheetPoint)
+                      const robotSvg = toSvgPoint(robotPoint)
+
+                      return [
+                        <line
+                          key={`taut-sheet-${index}-${cableIndex}`}
+                          className="sheet-side"
+                          x1={sheetSvg.x}
+                          y1={sheetSvg.y}
+                          x2={voSvg.x}
+                          y2={voSvg.y}
+                        />,
+                        <line
+                          key={`taut-robot-${index}-${cableIndex}`}
+                          className="robot-side"
+                          x1={robotSvg.x}
+                          y1={robotSvg.y}
+                          x2={roSvg.x}
+                          y2={roSvg.y}
+                        />,
+                      ]
+                    })
+                  })}
+                </g>
+              )}
               {displayedSolutionEntries.map(({ index, solution }) => {
                 const objectPoint = toSvgPoint(solution.po)
+                const virtualPoint = toSvgPoint(solution.vo)
                 const solutionState = solution.stable ? 'stable' : 'unstable'
 
                 return (
-                  <g
-                    className={`object-marker ${solutionState}`}
-                    key={`object-${index}`}
-                  >
-                    <circle cx={objectPoint.x} cy={objectPoint.y} r={14} />
-                    <text
-                      x={
-                        objectPoint.x + canvasTextMetrics.objectLabelXOffset
-                      }
-                      y={
-                        objectPoint.y + canvasTextMetrics.objectTitleYOffset
-                      }
+                  <Fragment key={`object-${index}`}>
+                    <g className={`object-marker ${solutionState}`}>
+                      <circle cx={objectPoint.x} cy={objectPoint.y} r={14} />
+                      <text
+                        x={
+                          objectPoint.x + canvasTextMetrics.objectLabelXOffset
+                        }
+                        y={
+                          objectPoint.y + canvasTextMetrics.objectTitleYOffset
+                        }
+                      >
+                        po{index + 1}
+                      </text>
+                      <text
+                        className="object-status"
+                        x={
+                          objectPoint.x + canvasTextMetrics.objectLabelXOffset
+                        }
+                        y={
+                          objectPoint.y + canvasTextMetrics.objectStatusYOffset
+                        }
+                      >
+                        {solution.stable
+                          ? t.results.stableBadge
+                          : t.results.unstableBadge}
+                      </text>
+                    </g>
+                    <g
+                      className={`object-marker virtual ${solutionState}`}
+                      key={`virtual-object-${index}`}
                     >
-                      po{index + 1}
-                    </text>
-                    <text
-                      className="object-status"
-                      x={
-                        objectPoint.x + canvasTextMetrics.objectLabelXOffset
-                      }
-                      y={
-                        objectPoint.y + canvasTextMetrics.objectStatusYOffset
-                      }
-                    >
-                      {solution.stable
-                        ? t.results.stableBadge
-                        : t.results.unstableBadge}
-                    </text>
-                  </g>
+                      <circle cx={virtualPoint.x} cy={virtualPoint.y} r={12} />
+                      <text
+                        x={
+                          virtualPoint.x + canvasTextMetrics.objectLabelXOffset
+                        }
+                        y={
+                          virtualPoint.y +
+                          canvasTextMetrics.virtualObjectTitleYOffset
+                        }
+                      >
+                        vo{index + 1}
+                      </text>
+                    </g>
+                  </Fragment>
                 )
               })}
               <g className="sheet-points">
@@ -1269,6 +1328,10 @@ function App() {
                             po=({formatNumber(solution.po.x)},{' '}
                             {formatNumber(solution.po.y)},{' '}
                             {formatNumber(solution.po.z)})
+                          </code>
+                          <code>
+                            vo=({formatNumber(solution.vo.x)},{' '}
+                            {formatNumber(solution.vo.y)})
                           </code>
                           <code>
                             taut=[{solution.tautCables.join(', ') || '-'}]

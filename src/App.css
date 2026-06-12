@@ -364,9 +364,15 @@ button:hover {
   vector-effect: non-scaling-stroke;
 }
 
-.cable-lines line.taut {
+.taut-cable-lines line {
   stroke: #d33f49;
-  stroke-width: 3;
+  stroke-width: 2;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.taut-cable-lines line.sheet-side {
+  stroke-dasharray: 9 5;
 }
 
 .sheet-points .point-hit-target,
@@ -431,6 +437,15 @@ button:hover {
 
 .object-marker.unstable circle {
   fill: #b12d36;
+  stroke-dasharray: 5 4;
+}
+
+.object-marker.virtual circle {
+  fill: #4d62c7;
+}
+
+.object-marker.virtual.unstable circle {
+  fill: #4d62c7;
   stroke-dasharray: 5 4;
 }
 
@@ -515,7 +530,7 @@ button:hover {
 
 .solution-row {
   display: grid;
-  grid-template-columns: 44px 84px minmax(0, 1fr) minmax(120px, auto);
+  grid-template-columns: 44px 84px minmax(0, 1fr) minmax(0, 0.75fr) minmax(120px, auto);
   gap: 10px;
   align-items: center;
   width: 100%;

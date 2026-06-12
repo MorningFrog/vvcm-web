@@ -10,8 +10,8 @@ VVCM Web is a React, TypeScript, and Vite visual test bench for the `@morningfro
 * Drag sheet vertices and robot positions directly on an SVG coordinate canvas.
 * Import, edit, sync, and copy point arrays as JSON.
 * Copy the full solver configuration, including `robotCount`, `holdHeight`, `sheet`, and `formation`.
-* Run `VvcmFk` in the browser and display candidate solution counts, stability labels, object poses, and taut cable indices.
-* Visualize the sheet polygon, robot formation, cable lines, taut cables, and selected or all FK solution positions.
+* Run `VvcmFk` in the browser and display candidate solution counts, stability labels, object poses, virtual object points, and taut cable indices.
+* Visualize the sheet polygon, robot formation, cable reference lines, single-solution taut `vi-vo` and `ri-ro` segments, and selected or all FK solution positions.
 * Switch the interface language between Simplified Chinese and English.
 
 ## Requirements
@@ -68,7 +68,7 @@ const fk = new VvcmFk(robotCount, holdHeight, sheet)
 const solutions = fk.updateStableSolutions(formation)
 ```
 
-The FK result panel lists every candidate branch from `solutions.solutions`, marks each branch as stable or unstable, and lets you show one branch or all branches on the canvas. In single-branch mode, taut cables from the selected branch are highlighted. In all-branches mode, object markers for every branch are drawn and cables taut in any visible branch are highlighted.
+The FK result panel lists every candidate branch from `solutions.solutions`, marks each branch as stable or unstable, shows each branch's `po` and `vo`, and lets you show one branch or all branches on the canvas. When exactly one branch is visible, taut cables from that branch are highlighted as `vi-vo` and `ri-ro` segments. In all-branches mode, object and virtual-object markers for every branch are drawn while taut segments are hidden to keep the canvas readable.
 
 ## Data Format
 
