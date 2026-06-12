@@ -584,6 +584,8 @@ function App() {
   )
   const [selectedKind, setSelectedKind] = useState<PointKind>('sheet')
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [showSheetView, setShowSheetView] = useState(true)
+  const [showRobotView, setShowRobotView] = useState(true)
   const [solutionDisplayMode, setSolutionDisplayMode] =
     useState<SolutionDisplayMode>('single')
   const [selectedSolutionIndex, setSelectedSolutionIndex] =
@@ -700,19 +702,25 @@ function App() {
   const fkResultJson = useMemo(() => fkResultToJson(solveState), [solveState])
 
   const canvasPoints = useMemo(() => {
-    const points = [...sheet, ...robots]
-    points.push(
-      ...displayedSolutionEntries.flatMap(({ solution }) => [
-        {
+    const points = [
+      ...(showSheetView ? sheet : []),
+      ...(showRobotView ? robots : []),
+    ]
+    if (showRobotView) {
+      points.push(
+        ...displayedSolutionEntries.map(({ solution }) => ({
           x: solution.po.x,
           y: solution.po.y,
-        },
-        solution.vo,
-      ]),
-    )
+        })),
+      )
+    }
+
+    if (showSheetView) {
+      points.push(...displayedSolutionEntries.map(({ solution }) => solution.vo))
+    }
 
     return points
-  }, [displayedSolutionEntries, robots, sheet])
+  }, [displayedSolutionEntries, robots, sheet, showRobotView, showSheetView])
 
   const [viewBox, setViewBox] = useState<ViewBox>(() =>
     buildViewBox(canvasPoints),
@@ -1274,34 +1282,62 @@ function App() {
             <div className="panel-heading canvas-heading">
               <div className="canvas-heading-main">
                 <h2>{t.canvas.title}</h2>
-                <div
-                  className="canvas-tools"
-                  role="group"
-                  aria-label={t.canvas.viewControlsAriaLabel}
-                >
-                  <button
-                    type="button"
-                    aria-label={t.canvas.zoomIn}
-                    title={t.canvas.zoomIn}
-                    onClick={() => zoomAtCenter(ZOOM_IN_FACTOR)}
+                <div className="canvas-heading-actions">
+                  <div
+                    className="canvas-layer-toggles"
+                    role="group"
+                    aria-label={t.canvas.visibilityControlsAriaLabel}
                   >
-                    +
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={t.canvas.zoomOut}
-                    title={t.canvas.zoomOut}
-                    onClick={() => zoomAtCenter(ZOOM_OUT_FACTOR)}
+                    <label className="canvas-layer-toggle">
+                      <input
+                        type="checkbox"
+                        checked={showSheetView}
+                        onChange={(event) =>
+                          setShowSheetView(event.currentTarget.checked)
+                        }
+                      />
+                      <span>{t.canvas.showSheetView}</span>
+                    </label>
+                    <label className="canvas-layer-toggle">
+                      <input
+                        type="checkbox"
+                        checked={showRobotView}
+                        onChange={(event) =>
+                          setShowRobotView(event.currentTarget.checked)
+                        }
+                      />
+                      <span>{t.canvas.showRobotView}</span>
+                    </label>
+                  </div>
+                  <div
+                    className="canvas-tools"
+                    role="group"
+                    aria-label={t.canvas.viewControlsAriaLabel}
                   >
-                    -
-                  </button>
-                  <button
-                    type="button"
-                    className="fit-view-button"
-                    onClick={fitCanvasView}
-                  >
-                    {t.canvas.fitView}
-                  </button>
+                    <button
+                      type="button"
+                      aria-label={t.canvas.zoomIn}
+                      title={t.canvas.zoomIn}
+                      onClick={() => zoomAtCenter(ZOOM_IN_FACTOR)}
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={t.canvas.zoomOut}
+                      title={t.canvas.zoomOut}
+                      onClick={() => zoomAtCenter(ZOOM_OUT_FACTOR)}
+                    >
+                      -
+                    </button>
+                    <button
+                      type="button"
+                      className="fit-view-button"
+                      onClick={fitCanvasView}
+                    >
+                      {t.canvas.fitView}
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="legend" aria-label={t.canvas.legendAriaLabel}>
@@ -1370,39 +1406,45 @@ function App() {
                   y2={viewBox.minY + viewBox.height}
                 />
               </g>
-              <polygon
-                className="sheet-polygon"
-                points={sheet
-                  .map(toSvgPoint)
-                  .map((point) => `${point.x},${point.y}`)
-                  .join(' ')}
-              />
-              <polyline
-                className="robot-polyline"
-                points={[...robots, robots[0]]
-                  .filter(Boolean)
-                  .map(toSvgPoint)
-                  .map((point) => `${point.x},${point.y}`)
-                  .join(' ')}
-              />
-              <g className="cable-lines">
-                {sheet.map((sheetPoint, index) => {
-                  const robotPoint = robots[index]
-                  const sheetSvg = toSvgPoint(sheetPoint)
-                  const robotSvg = toSvgPoint(robotPoint)
+              {showSheetView && (
+                <polygon
+                  className="sheet-polygon"
+                  points={sheet
+                    .map(toSvgPoint)
+                    .map((point) => `${point.x},${point.y}`)
+                    .join(' ')}
+                />
+              )}
+              {showRobotView && (
+                <polyline
+                  className="robot-polyline"
+                  points={[...robots, robots[0]]
+                    .filter(Boolean)
+                    .map(toSvgPoint)
+                    .map((point) => `${point.x},${point.y}`)
+                    .join(' ')}
+                />
+              )}
+              {showSheetView && showRobotView && (
+                <g className="cable-lines">
+                  {sheet.map((sheetPoint, index) => {
+                    const robotPoint = robots[index]
+                    const sheetSvg = toSvgPoint(sheetPoint)
+                    const robotSvg = toSvgPoint(robotPoint)
 
-                  return (
-                    <line
-                      key={`cable-${index}`}
-                      x1={sheetSvg.x}
-                      y1={sheetSvg.y}
-                      x2={robotSvg.x}
-                      y2={robotSvg.y}
-                    />
-                  )
-                })}
-              </g>
-              {showTautCableSegments && (
+                    return (
+                      <line
+                        key={`cable-${index}`}
+                        x1={sheetSvg.x}
+                        y1={sheetSvg.y}
+                        x2={robotSvg.x}
+                        y2={robotSvg.y}
+                      />
+                    )
+                  })}
+                </g>
+              )}
+              {showTautCableSegments && (showSheetView || showRobotView) && (
                 <g className="taut-cable-lines">
                   {displayedSolutionEntries.flatMap(({ index, solution }) => {
                     const voSvg = toSvgPoint(solution.vo)
@@ -1411,30 +1453,34 @@ function App() {
                     return solution.tautCables.flatMap((cableIndex) => {
                       const sheetPoint = sheet[cableIndex]
                       const robotPoint = robots[cableIndex]
-                      if (!sheetPoint || !robotPoint) {
+                      if (
+                        (showSheetView && !sheetPoint) ||
+                        (showRobotView && !robotPoint)
+                      ) {
                         return []
                       }
 
-                      const sheetSvg = toSvgPoint(sheetPoint)
-                      const robotSvg = toSvgPoint(robotPoint)
-
                       return [
-                        <line
-                          key={`taut-sheet-${index}-${cableIndex}`}
-                          className="sheet-side"
-                          x1={sheetSvg.x}
-                          y1={sheetSvg.y}
-                          x2={voSvg.x}
-                          y2={voSvg.y}
-                        />,
-                        <line
-                          key={`taut-robot-${index}-${cableIndex}`}
-                          className="robot-side"
-                          x1={robotSvg.x}
-                          y1={robotSvg.y}
-                          x2={roSvg.x}
-                          y2={roSvg.y}
-                        />,
+                        showSheetView && sheetPoint ? (
+                          <line
+                            key={`taut-sheet-${index}-${cableIndex}`}
+                            className="sheet-side"
+                            x1={toSvgPoint(sheetPoint).x}
+                            y1={toSvgPoint(sheetPoint).y}
+                            x2={voSvg.x}
+                            y2={voSvg.y}
+                          />
+                        ) : null,
+                        showRobotView && robotPoint ? (
+                          <line
+                            key={`taut-robot-${index}-${cableIndex}`}
+                            className="robot-side"
+                            x1={toSvgPoint(robotPoint).x}
+                            y1={toSvgPoint(robotPoint).y}
+                            x2={roSvg.x}
+                            y2={roSvg.y}
+                          />
+                        ) : null,
                       ]
                     })
                   })}
@@ -1445,136 +1491,157 @@ function App() {
                 const virtualPoint = toSvgPoint(solution.vo)
                 const solutionState = solution.stable ? 'stable' : 'unstable'
 
+                if (!showRobotView && !showSheetView) {
+                  return null
+                }
+
                 return (
                   <g
                     key={`object-${index}`}
                     style={solutionColorStyle(index)}
                   >
-                    <g className={`object-marker ${solutionState}`}>
-                      <circle
-                        cx={objectPoint.x}
-                        cy={objectPoint.y}
-                        r={canvasMetrics.objectRadius}
-                      />
-                      <text
-                        x={
-                          objectPoint.x + canvasMetrics.objectLabelXOffset
-                        }
-                        y={
-                          objectPoint.y + canvasMetrics.objectTitleYOffset
-                        }
-                      >
-                        po{displayIndex(index, indexBase)}
-                      </text>
-                      <text
-                        className="object-status"
-                        x={
-                          objectPoint.x + canvasMetrics.objectLabelXOffset
-                        }
-                        y={
-                          objectPoint.y + canvasMetrics.objectStatusYOffset
-                        }
-                      >
-                        {solution.stable
-                          ? t.results.stableBadge
-                          : t.results.unstableBadge}
-                      </text>
-                    </g>
-                    <g className={`object-marker virtual ${solutionState}`}>
-                      <circle
-                        cx={virtualPoint.x}
-                        cy={virtualPoint.y}
-                        r={canvasMetrics.virtualObjectRadius}
-                      />
-                      <text
-                        x={
-                          virtualPoint.x + canvasMetrics.objectLabelXOffset
-                        }
-                        y={
-                          virtualPoint.y +
-                          canvasMetrics.virtualObjectTitleYOffset
-                        }
-                      >
-                        vo{displayIndex(index, indexBase)}
-                      </text>
-                    </g>
+                    {showRobotView && (
+                      <g className={`object-marker ${solutionState}`}>
+                        <circle
+                          cx={objectPoint.x}
+                          cy={objectPoint.y}
+                          r={canvasMetrics.objectRadius}
+                        />
+                        <text
+                          x={
+                            objectPoint.x + canvasMetrics.objectLabelXOffset
+                          }
+                          y={
+                            objectPoint.y + canvasMetrics.objectTitleYOffset
+                          }
+                        >
+                          po{displayIndex(index, indexBase)}
+                        </text>
+                        <text
+                          className="object-status"
+                          x={
+                            objectPoint.x + canvasMetrics.objectLabelXOffset
+                          }
+                          y={
+                            objectPoint.y + canvasMetrics.objectStatusYOffset
+                          }
+                        >
+                          {solution.stable
+                            ? t.results.stableBadge
+                            : t.results.unstableBadge}
+                        </text>
+                      </g>
+                    )}
+                    {showSheetView && (
+                      <g className={`object-marker virtual ${solutionState}`}>
+                        <circle
+                          cx={virtualPoint.x}
+                          cy={virtualPoint.y}
+                          r={canvasMetrics.virtualObjectRadius}
+                        />
+                        <text
+                          x={
+                            virtualPoint.x + canvasMetrics.objectLabelXOffset
+                          }
+                          y={
+                            virtualPoint.y +
+                            canvasMetrics.virtualObjectTitleYOffset
+                          }
+                        >
+                          vo{displayIndex(index, indexBase)}
+                        </text>
+                      </g>
+                    )}
                   </g>
                 )
               })}
-              <g className="sheet-points">
-                {sheet.map((point, index) => {
-                  const svgPoint = toSvgPoint(point)
-                  const active =
-                    selectedKind === 'sheet' && selectedIndex === index
+              {showSheetView && (
+                <g className="sheet-points">
+                  {sheet.map((point, index) => {
+                    const svgPoint = toSvgPoint(point)
+                    const active =
+                      selectedKind === 'sheet' && selectedIndex === index
 
-                  return (
-                    <g key={`sheet-${index}`}>
-                      <circle
-                        className="point-hit-target"
-                        cx={svgPoint.x}
-                        cy={svgPoint.y}
-                        r={canvasMetrics.sheetHitRadius}
-                        onPointerDown={handlePointPointerDown('sheet', index)}
-                      />
-                      <circle
-                        className={`point-marker ${active ? 'active' : ''}`}
-                        cx={svgPoint.x}
-                        cy={svgPoint.y}
-                        r={
-                          active
-                            ? canvasMetrics.sheetActiveMarkerRadius
-                            : canvasMetrics.sheetMarkerRadius
-                        }
-                        onPointerDown={handlePointPointerDown('sheet', index)}
-                      />
-                      <text
-                        x={svgPoint.x + canvasMetrics.pointLabelXOffset}
-                        y={svgPoint.y + canvasMetrics.sheetLabelYOffset}
-                        onPointerDown={handlePointPointerDown('sheet', index)}
-                      >
-                        {pointLabel('sheet', index, indexBase)}
-                      </text>
-                    </g>
-                  )
-                })}
-              </g>
-              <g className="robot-points">
-                {robots.map((point, index) => {
-                  const svgPoint = toSvgPoint(point)
-                  const active =
-                    selectedKind === 'robots' && selectedIndex === index
+                    return (
+                      <g key={`sheet-${index}`}>
+                        <circle
+                          className="point-hit-target"
+                          cx={svgPoint.x}
+                          cy={svgPoint.y}
+                          r={canvasMetrics.sheetHitRadius}
+                          onPointerDown={handlePointPointerDown('sheet', index)}
+                        />
+                        <circle
+                          className={`point-marker ${active ? 'active' : ''}`}
+                          cx={svgPoint.x}
+                          cy={svgPoint.y}
+                          r={
+                            active
+                              ? canvasMetrics.sheetActiveMarkerRadius
+                              : canvasMetrics.sheetMarkerRadius
+                          }
+                          onPointerDown={handlePointPointerDown('sheet', index)}
+                        />
+                        <text
+                          x={svgPoint.x + canvasMetrics.pointLabelXOffset}
+                          y={svgPoint.y + canvasMetrics.sheetLabelYOffset}
+                          onPointerDown={handlePointPointerDown('sheet', index)}
+                        >
+                          {pointLabel('sheet', index, indexBase)}
+                        </text>
+                      </g>
+                    )
+                  })}
+                </g>
+              )}
+              {showRobotView && (
+                <g className="robot-points">
+                  {robots.map((point, index) => {
+                    const svgPoint = toSvgPoint(point)
+                    const active =
+                      selectedKind === 'robots' && selectedIndex === index
 
-                  return (
-                    <g key={`robot-${index}`}>
-                      <circle
-                        className="point-hit-target"
-                        cx={svgPoint.x}
-                        cy={svgPoint.y}
-                        r={canvasMetrics.robotHitRadius}
-                        onPointerDown={handlePointPointerDown('robots', index)}
-                      />
-                      <circle
-                        className={`point-marker ${active ? 'active' : ''}`}
-                        cx={svgPoint.x}
-                        cy={svgPoint.y}
-                        r={
-                          active
-                            ? canvasMetrics.robotActiveMarkerRadius
-                            : canvasMetrics.robotMarkerRadius
-                        }
-                        onPointerDown={handlePointPointerDown('robots', index)}
-                      />
-                      <text
-                        x={svgPoint.x + canvasMetrics.pointLabelXOffset}
-                        y={svgPoint.y + canvasMetrics.robotLabelYOffset}
-                        onPointerDown={handlePointPointerDown('robots', index)}
-                      >
-                        {pointLabel('robots', index, indexBase)}
-                      </text>
-                    </g>
-                  )
-                })}
-              </g>
+                    return (
+                      <g key={`robot-${index}`}>
+                        <circle
+                          className="point-hit-target"
+                          cx={svgPoint.x}
+                          cy={svgPoint.y}
+                          r={canvasMetrics.robotHitRadius}
+                          onPointerDown={handlePointPointerDown(
+                            'robots',
+                            index,
+                          )}
+                        />
+                        <circle
+                          className={`point-marker ${active ? 'active' : ''}`}
+                          cx={svgPoint.x}
+                          cy={svgPoint.y}
+                          r={
+                            active
+                              ? canvasMetrics.robotActiveMarkerRadius
+                              : canvasMetrics.robotMarkerRadius
+                          }
+                          onPointerDown={handlePointPointerDown(
+                            'robots',
+                            index,
+                          )}
+                        />
+                        <text
+                          x={svgPoint.x + canvasMetrics.pointLabelXOffset}
+                          y={svgPoint.y + canvasMetrics.robotLabelYOffset}
+                          onPointerDown={handlePointPointerDown(
+                            'robots',
+                            index,
+                          )}
+                        >
+                          {pointLabel('robots', index, indexBase)}
+                        </text>
+                      </g>
+                    )
+                  })}
+                </g>
+              )}
             </svg>
           </section>
 

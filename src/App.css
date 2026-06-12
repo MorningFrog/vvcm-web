@@ -177,6 +177,7 @@
 
 .canvas-heading-main {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -196,8 +197,62 @@
   justify-content: flex-end;
 }
 
+.canvas-heading-actions {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .canvas-heading .canvas-tools {
   flex: 0 0 auto;
+}
+
+.canvas-layer-toggles {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0;
+}
+
+.canvas-layer-toggle {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 5px;
+  padding: 0 9px;
+  color: #435355;
+  font-size: 12px;
+  font-weight: 760;
+  cursor: pointer;
+  user-select: none;
+}
+
+.canvas-layer-toggle:hover {
+  color: #142124;
+}
+
+.canvas-layer-toggle span {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.canvas-layer-toggle input {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  padding: 0;
+  accent-color: #007d7a;
+  cursor: pointer;
 }
 
 .canvas-tools {
@@ -889,5 +944,10 @@ code {
 
   .canvas-heading-main {
     align-items: flex-start;
+  }
+
+  .canvas-heading-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 }
