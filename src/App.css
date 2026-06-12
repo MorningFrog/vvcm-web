@@ -196,12 +196,19 @@
   gap: 10px;
 }
 
-.field {
-  display: grid;
-  gap: 6px;
+.field,
+.selected-point label,
+.table-head,
+.solution-select {
   color: #4c5b5d;
   font-size: 13px;
   font-weight: 680;
+  line-height: 1.35;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
 }
 
 .field > span {
@@ -227,6 +234,11 @@ select {
   border-radius: 6px;
   color: #142124;
   background: #fbfcfb;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 520;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
 }
 
 input {
@@ -244,7 +256,6 @@ textarea {
   resize: vertical;
   padding: 12px;
   font-family: var(--mono);
-  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -330,9 +341,6 @@ button:hover {
 .selected-point label {
   display: grid;
   gap: 5px;
-  color: #516063;
-  font-size: 12px;
-  font-weight: 760;
 }
 
 .table-head,
@@ -345,9 +353,6 @@ button:hover {
 
 .table-head {
   margin-bottom: 8px;
-  color: #657476;
-  font-size: 12px;
-  font-weight: 760;
 }
 
 .table-body {
@@ -589,9 +594,6 @@ button:hover {
 .solution-select {
   display: grid;
   gap: 5px;
-  color: #516063;
-  font-size: 12px;
-  font-weight: 760;
 }
 
 .solution-list {
