@@ -696,17 +696,6 @@ function App() {
       })),
     [displayedSolutionEntries],
   )
-  const activeSceneSolution = useMemo<RobotSceneSolutionEntry | null>(
-    () =>
-      selectedSolutionEntry
-        ? {
-            color: getSolutionColor(selectedSolutionEntry.index),
-            index: selectedSolutionEntry.index,
-            solution: selectedSolutionEntry.solution,
-          }
-        : null,
-    [selectedSolutionEntry],
-  )
   const sceneSolutionMessage =
     solveState.status === 'ok'
       ? indexedSolutions.length
@@ -1599,7 +1588,6 @@ function App() {
           </section>
 
           <RobotScene3D
-            activeSolution={activeSceneSolution}
             holdHeight={holdHeight}
             indexBase={indexBase}
             labels={t.scene3d}

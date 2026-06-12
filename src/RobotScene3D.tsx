@@ -12,6 +12,15 @@ type Point2 = {
 
 type IndexBase = 0 | 1
 
+type SceneLabelKind = 'axis' | 'point'
+
+type TextSprite = THREE.Sprite & {
+  userData: {
+    labelAspect: number
+    labelKind: SceneLabelKind
+  }
+}
+
 export type RobotSceneSolutionEntry = {
   color: string
   index: number
@@ -32,7 +41,6 @@ export type RobotScene3DLabels = {
 }
 
 type RobotScene3DProps = {
-  activeSolution: RobotSceneSolutionEntry | null
   holdHeight: number
   indexBase: IndexBase
   labels: RobotScene3DLabels
@@ -57,8 +65,15 @@ const GRID_COLOR = '#dfe6e3'
 const X_AXIS_COLOR = '#b12d36'
 const Y_AXIS_COLOR = '#007d7a'
 const Z_AXIS_COLOR = '#4d62c7'
+const labelRendererSize = new THREE.Vector2()
+const labelCameraDirection = new THREE.Vector3()
+const labelSpritePosition = new THREE.Vector3()
+const labelCameraToSprite = new THREE.Vector3()
 
 const displayIndex = (index: number, indexBase: IndexBase) => index + indexBase
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value))
 
 const toVector3 = (x: number, y: number, z: number) =>
   new THREE.Vector3(x, y, z)
@@ -128,17 +143,26 @@ const makeLine = (
 const makeTextSprite = (
   text: string,
   color: string,
-  size: number,
-  offset: THREE.Vector3,
+  labelKind: SceneLabelKind,
+  position: THREE.Vector3,
 ) => {
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
-  const fontSize = 42
-  const paddingX = 20
-  const paddingY = 12
+  const fontSize = 52
+  const paddingX = 14
+  const paddingY = 6
 
   if (!context) {
-    return new THREE.Sprite(new THREE.SpriteMaterial({ color }))
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        color,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    ) as TextSprite
+    sprite.userData = { labelAspect: 1, labelKind }
+    sprite.position.copy(position)
+    return sprite
   }
 
   context.font = `700 ${fontSize}px Inter, Arial, sans-serif`
@@ -147,24 +171,84 @@ const makeTextSprite = (
   canvas.height = fontSize + paddingY * 2
   context.font = `700 ${fontSize}px Inter, Arial, sans-serif`
   context.textBaseline = 'middle'
-  context.fillStyle = 'rgba(255, 255, 255, 0.88)'
-  context.fillRect(0, 0, canvas.width, canvas.height)
+  context.lineJoin = 'round'
+  context.lineWidth = 8
+  context.strokeStyle = 'rgba(255, 255, 255, 0.9)'
+  context.shadowColor = 'rgba(20, 33, 36, 0.28)'
+  context.shadowBlur = 5
+  context.shadowOffsetX = 0
+  context.shadowOffsetY = 2
+  context.strokeText(text, paddingX, canvas.height / 2)
+  context.shadowColor = 'transparent'
   context.fillStyle = color
   context.fillText(text, paddingX, canvas.height / 2)
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
   const material = new THREE.SpriteMaterial({
+    depthWrite: false,
     depthTest: false,
     map: texture,
     transparent: true,
   })
-  const sprite = new THREE.Sprite(material)
+  const sprite = new THREE.Sprite(material) as TextSprite
   const aspect = canvas.width / canvas.height
-  sprite.scale.set(size * aspect, size, 1)
-  sprite.position.copy(offset)
+  sprite.userData = { labelAspect: aspect, labelKind }
+  sprite.scale.set(aspect, 1, 1)
+  sprite.position.copy(position)
 
   return sprite
+}
+
+const isTextSprite = (object: THREE.Object3D): object is TextSprite =>
+  object instanceof THREE.Sprite &&
+  typeof object.userData.labelAspect === 'number' &&
+  (object.userData.labelKind === 'axis' ||
+    object.userData.labelKind === 'point')
+
+const getLabelTargetPixels = (
+  labelKind: SceneLabelKind,
+  viewportHeight: number,
+) => {
+  if (labelKind === 'axis') {
+    return clamp(viewportHeight * 0.062, 22, 32)
+  }
+
+  return clamp(viewportHeight * 0.075, 26, 38)
+}
+
+const scaleTextSprites = (
+  camera: THREE.PerspectiveCamera,
+  contentRoot: THREE.Group,
+  renderer: THREE.WebGLRenderer,
+) => {
+  const viewportHeight =
+    renderer.domElement.clientHeight || renderer.getSize(labelRendererSize).y
+  if (!viewportHeight) {
+    return
+  }
+
+  const cameraDirection = camera.getWorldDirection(labelCameraDirection)
+  const visibleHeightFactor =
+    2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)
+
+  contentRoot.updateMatrixWorld(true)
+  contentRoot.traverse((object) => {
+    if (!isTextSprite(object)) {
+      return
+    }
+
+    object.getWorldPosition(labelSpritePosition)
+    labelCameraToSprite.copy(labelSpritePosition).sub(camera.position)
+    const depth = Math.max(1, labelCameraToSprite.dot(cameraDirection))
+    const targetPixels = getLabelTargetPixels(
+      object.userData.labelKind,
+      viewportHeight,
+    )
+    const worldHeight = (targetPixels / viewportHeight) * visibleHeightFactor * depth
+
+    object.scale.set(worldHeight * object.userData.labelAspect, worldHeight, 1)
+  })
 }
 
 const makeArrow = (
@@ -172,7 +256,6 @@ const makeArrow = (
   length: number,
   color: string,
   label: string,
-  labelSize: number,
 ) => {
   const arrow = new THREE.Group()
   const helper = new THREE.ArrowHelper(
@@ -189,7 +272,7 @@ const makeArrow = (
     makeTextSprite(
       label,
       color,
-      labelSize,
+      'axis',
       direction.clone().normalize().multiplyScalar(length * 1.08),
     ),
   )
@@ -229,7 +312,6 @@ const fitCameraToPoints = (
 }
 
 export function RobotScene3D({
-  activeSolution,
   holdHeight,
   indexBase,
   labels,
@@ -267,8 +349,7 @@ export function RobotScene3D({
     camera.up.set(0, 0, 1)
 
     const controls = new OrbitControls(camera, renderer.domElement)
-    controls.enableDamping = true
-    controls.dampingFactor = 0.08
+    controls.enableDamping = false
     controls.screenSpacePanning = false
     controls.target.set(0, 0, 0)
 
@@ -301,6 +382,7 @@ export function RobotScene3D({
     let frameId = 0
     const animate = () => {
       controls.update()
+      scaleTextSprites(camera, contentRoot, renderer)
       renderer.render(scene, camera)
       frameId = window.requestAnimationFrame(animate)
     }
@@ -354,16 +436,19 @@ export function RobotScene3D({
     const span = Math.max(size.x, size.y, size.z, finiteHoldHeight, 800)
     const gridSize = Math.max(span * 1.35, 1000)
     const markerRadius = Math.max(span * 0.012, 8)
-    const labelSize = Math.max(span * 0.05, 44)
+    const labelOffset = Math.max(markerRadius * 1.8, span * 0.02)
+    const groundLabelOffset = new THREE.Vector3(labelOffset, 0, labelOffset)
+    const holdLabelOffset = new THREE.Vector3(labelOffset, 0, labelOffset * 1.8)
+    const objectLabelOffset = new THREE.Vector3(labelOffset, 0, -labelOffset * 0.8)
     const axisLength = Math.max(span * 0.45, 260)
 
     const grid = new THREE.GridHelper(gridSize, 20, GRID_CENTER_COLOR, GRID_COLOR)
     grid.rotation.x = Math.PI / 2
     grid.up.set(0, 0, 1)
     contentRoot.add(grid)
-    contentRoot.add(makeArrow(new THREE.Vector3(1, 0, 0), axisLength, X_AXIS_COLOR, 'X', labelSize))
-    contentRoot.add(makeArrow(new THREE.Vector3(0, 1, 0), axisLength, Y_AXIS_COLOR, 'Y', labelSize))
-    contentRoot.add(makeArrow(new THREE.Vector3(0, 0, 1), axisLength, Z_AXIS_COLOR, 'Z', labelSize))
+    contentRoot.add(makeArrow(new THREE.Vector3(1, 0, 0), axisLength, X_AXIS_COLOR, 'X'))
+    contentRoot.add(makeArrow(new THREE.Vector3(0, 1, 0), axisLength, Y_AXIS_COLOR, 'Y'))
+    contentRoot.add(makeArrow(new THREE.Vector3(0, 0, 1), axisLength, Z_AXIS_COLOR, 'Z'))
 
     robots.forEach((robot, index) => {
       const groundPoint = toVector3(robot.x, robot.y, 0)
@@ -380,16 +465,16 @@ export function RobotScene3D({
         makeTextSprite(
           `r${labelIndex}`,
           ROBOT_GROUND_COLOR,
-          labelSize,
-          groundPoint.clone().add(new THREE.Vector3(markerRadius * 1.6, 0, labelSize * 0.2)),
+          'point',
+          groundPoint.clone().add(groundLabelOffset),
         ),
       )
       contentRoot.add(
         makeTextSprite(
           `p${labelIndex}`,
           ROBOT_HOLD_COLOR,
-          labelSize,
-          holdPoint.clone().add(new THREE.Vector3(markerRadius * 1.6, 0, labelSize * 0.2)),
+          'point',
+          holdPoint.clone().add(holdLabelOffset),
         ),
       )
     })
@@ -414,19 +499,12 @@ export function RobotScene3D({
         makeTextSprite(
           `po${displayIndex(index, indexBase)}`,
           color,
-          labelSize,
-          poPoint.clone().add(new THREE.Vector3(markerRadius * 1.8, 0, markerRadius * 1.8)),
+          'point',
+          poPoint.clone().add(objectLabelOffset),
         ),
       )
-    })
 
-    if (activeSolution) {
-      const poPoint = toVector3(
-        activeSolution.solution.po.x,
-        activeSolution.solution.po.y,
-        activeSolution.solution.po.z,
-      )
-      activeSolution.solution.tautCables.forEach((robotIndex) => {
+      solution.tautCables.forEach((robotIndex) => {
         const robot = robots[robotIndex]
         if (!robot) {
           return
@@ -435,11 +513,10 @@ export function RobotScene3D({
         const holdPoint = toVector3(robot.x, robot.y, finiteHoldHeight)
         contentRoot.add(makeLine(holdPoint, poPoint, TAUT_LINE_COLOR, 1))
       })
-    }
+    })
 
     fitCameraToPoints(camera, controls, boundsPoints)
   }, [
-    activeSolution,
     holdHeight,
     indexBase,
     resetSignal,
