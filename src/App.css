@@ -41,6 +41,12 @@
   gap: 10px;
 }
 
+.source-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .language-select,
 .index-base-control {
   display: inline-flex;
@@ -80,6 +86,7 @@
 }
 
 .version-pill,
+.source-link,
 .panel-heading span {
   min-height: 34px;
   display: inline-flex;
@@ -91,6 +98,22 @@
   background: #ffffff;
   font-size: 13px;
   font-weight: 650;
+}
+
+.source-link {
+  gap: 6px;
+  text-decoration: none;
+}
+
+.source-link:hover {
+  border-color: #007d7a;
+  color: #142124;
+}
+
+.source-link svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
 }
 
 .workspace {
@@ -355,7 +378,8 @@ textarea {
 input:focus,
 textarea:focus,
 select:focus,
-button:focus-visible {
+button:focus-visible,
+.source-link:focus-visible {
   outline: 3px solid rgba(0, 125, 122, 0.22);
   outline-offset: 2px;
   border-color: #007d7a;

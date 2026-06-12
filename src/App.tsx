@@ -1242,6 +1242,37 @@ function App() {
             </select>
           </label>
           <div className="version-pill">vvcm-rs {version()}</div>
+          <nav
+            className="source-links"
+            aria-label={t.header.sourceLinksAriaLabel}
+          >
+            <a
+              className="source-link"
+              href="https://github.com/MorningFrog/vvcm-rs"
+              target="_blank"
+              rel="noreferrer"
+              aria-label={t.header.vvcmSourceAriaLabel}
+              title={t.header.vvcmSourceAriaLabel}
+            >
+              <svg aria-hidden="true" focusable="false">
+                <use href="/icons.svg#github-icon" />
+              </svg>
+              <span>VVCM</span>
+            </a>
+            <a
+              className="source-link"
+              href="https://github.com/MorningFrog/vvcm-web"
+              target="_blank"
+              rel="noreferrer"
+              aria-label={t.header.webSourceAriaLabel}
+              title={t.header.webSourceAriaLabel}
+            >
+              <svg aria-hidden="true" focusable="false">
+                <use href="/icons.svg#github-icon" />
+              </svg>
+              <span>Web</span>
+            </a>
+          </nav>
         </div>
       </header>
 

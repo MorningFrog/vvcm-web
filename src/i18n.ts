@@ -10,7 +10,10 @@ export const translations = {
       indexBaseAriaLabel: '显示索引基准',
       indexBaseLabel: '索引',
       oneBasedIndex: '1-based',
+      sourceLinksAriaLabel: 'GitHub 源代码链接',
       title: 'VVCM 可视化测试台',
+      vvcmSourceAriaLabel: '在 GitHub 打开 VVCM 源代码',
+      webSourceAriaLabel: '在 GitHub 打开 Web 页面源代码',
       zeroBasedIndex: '0-based',
     },
     controls: {
@@ -134,7 +137,10 @@ export const translations = {
       indexBaseAriaLabel: 'Displayed index base',
       indexBaseLabel: 'Index',
       oneBasedIndex: '1-based',
+      sourceLinksAriaLabel: 'GitHub source links',
       title: 'VVCM Visual Test Bench',
+      vvcmSourceAriaLabel: 'VVCM source code on GitHub',
+      webSourceAriaLabel: 'Web source code on GitHub',
       zeroBasedIndex: '0-based',
     },
     controls: {
