@@ -29,6 +29,12 @@ VVCM Web is a React, TypeScript, and Vite visual test bench for the `@morningfro
 npm install
 ```
 
+Install the managed Chromium browser once before using the screenshot script:
+
+```bash
+npm run screenshot:install
+```
+
 ## Run
 
 ```bash
@@ -39,6 +45,32 @@ Vite prints the local development URL after startup. If the default port is alre
 
 ```bash
 npm run dev -- --host 127.0.0.1 --port 5174
+```
+
+## Screenshot
+
+Use the project screenshot script for repeatable visual checks, especially after Codex or another automation tool changes UI, canvas, or 3D visualization code:
+
+```bash
+npm run screenshot
+```
+
+The script starts a temporary Vite server on `127.0.0.1:5174` or the next free port, waits for the main UI to render, captures desktop and mobile viewport screenshots, writes them to `artifacts/screenshots/`, and shuts the server down automatically. Inspect both `artifacts/screenshots/vite-desktop.png` and `artifacts/screenshots/vite-mobile.png` after the command finishes.
+
+Screenshot configuration is controlled with environment variables:
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `VITE_SCREENSHOT_HOST` | `127.0.0.1` | Host used by the temporary Vite server. |
+| `VITE_SCREENSHOT_PORT` | `5174` | Preferred port for the temporary Vite server. |
+| `VITE_SCREENSHOT_STRICT_PORT` | `false` | Set to `true` to fail instead of trying the next free port. |
+| `VITE_SCREENSHOT_DIR` | `artifacts/screenshots` | Directory where screenshots are written. |
+| `VITE_SCREENSHOT_PATH` | `/` | Route to open before taking screenshots. |
+
+PowerShell example:
+
+```powershell
+$env:VITE_SCREENSHOT_PORT = '5180'; $env:VITE_SCREENSHOT_PATH = '/'; npm run screenshot
 ```
 
 ## Build
@@ -128,6 +160,8 @@ The Vite dependency optimizer excludes `@morningfrog/vvcm-rs` so the same wasm c
 | `npm run build` | Type-check the project and build production assets. |
 | `npm run lint` | Run ESLint. |
 | `npm run preview` | Preview the production build locally. |
+| `npm run screenshot` | Start a temporary Vite server and capture desktop and mobile screenshots. |
+| `npm run screenshot:install` | Install Playwright's managed Chromium browser for screenshot capture. |
 
 ## Project Structure
 
@@ -139,5 +173,7 @@ src/
   index.css     Global styles.
   main.tsx      React entry point.
   RobotScene3D.tsx  Z-up Three.js robot hold-height and FK object visualization.
+scripts/
+  screenshot-vite.mjs  Temporary Vite server and Playwright screenshot helper.
 vite.config.ts  Vite config, React plugin, and vvcm-rs wasm compatibility.
 ```

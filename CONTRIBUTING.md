@@ -69,3 +69,19 @@ npm run dev
 ```
 
 This will start the development server and please open the application in your browser. The server will automatically reload when you make changes to the code.
+
+### 4. Capture Local Screenshots
+
+Install Playwright's managed Chromium browser once:
+
+```bash
+npm run screenshot:install
+```
+
+Then capture repeatable desktop and mobile screenshots:
+
+```bash
+npm run screenshot
+```
+
+The screenshot script starts a temporary Vite server, waits for the main UI to render, writes screenshots to `artifacts/screenshots/`, and shuts the server down automatically.

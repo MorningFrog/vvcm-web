@@ -12,6 +12,10 @@ Read `CONTRIBUTING.md` before starting development work. It contains important d
 
 After using a local development server for testing, stop it before finishing. The user will start any local server they need themselves.
 
+## Screenshot-Based Visual Checks
+
+When modifying UI, canvas, 3D visualization, layout, styling, or other user-visible behavior, use the screenshot workflow documented in the `README.md` Screenshot section. Prefer `npm run screenshot` for Codex visual checks because it starts a temporary Vite server, captures desktop and mobile screenshots, and shuts the server down automatically; inspect the generated screenshots before finishing. Keep screenshot command parameters documented in `README.md` only to avoid duplicate instructions.
+
 ## Documentation Updates
 
 When modifying code, also review `README.md`, `AGENTS.md`, `CHANGELOG.md`, `TODO.md` and `CONTRIBUTING.md` to determine whether they need to be updated.
