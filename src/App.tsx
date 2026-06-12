@@ -25,6 +25,7 @@ import {
   type Messages,
   type ParseErrorCode,
 } from './i18n'
+import { RobotScene3D, type RobotSceneSolutionEntry } from './RobotScene3D'
 
 type Point = {
   x: number
@@ -675,6 +676,32 @@ function App() {
 
     return selectedSolutionEntry ? [selectedSolutionEntry] : []
   }, [indexedSolutions, selectedSolutionEntry, solutionDisplayMode])
+  const visibleSceneSolutions = useMemo<RobotSceneSolutionEntry[]>(
+    () =>
+      displayedSolutionEntries.map(({ index, solution }) => ({
+        color: getSolutionColor(index),
+        index,
+        solution,
+      })),
+    [displayedSolutionEntries],
+  )
+  const activeSceneSolution = useMemo<RobotSceneSolutionEntry | null>(
+    () =>
+      selectedSolutionEntry
+        ? {
+            color: getSolutionColor(selectedSolutionEntry.index),
+            index: selectedSolutionEntry.index,
+            solution: selectedSolutionEntry.solution,
+          }
+        : null,
+    [selectedSolutionEntry],
+  )
+  const sceneSolutionMessage =
+    solveState.status === 'ok'
+      ? indexedSolutions.length
+        ? null
+        : t.results.noSolutions
+      : solveState.message
   const showTautCableSegments = displayedSolutionEntries.length === 1
 
   const canvasPoints = useMemo(() => {
@@ -1515,6 +1542,16 @@ function App() {
               </g>
             </svg>
           </section>
+
+          <RobotScene3D
+            activeSolution={activeSceneSolution}
+            holdHeight={holdHeight}
+            indexBase={indexBase}
+            labels={t.scene3d}
+            robots={robots}
+            solutionMessage={sceneSolutionMessage}
+            visibleSolutions={visibleSceneSolutions}
+          />
 
           <section className="result-panel">
             <div className="panel-heading">

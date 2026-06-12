@@ -9,6 +9,7 @@ VVCM Web is a React, TypeScript, and Vite visual test bench for the `@morningfro
 * Edit deformable sheet vertices and robot positions in coordinate tables.
 * Drag sheet vertices and robot positions directly on an SVG coordinate canvas.
 * Pan and zoom the coordinate canvas manually, with a fit-view control to reframe the current geometry.
+* Inspect robot ground points `r_i`, elevated hold points `p_i`, FK object points `po`, and taut `p_i-po` links in a Z-up Three.js 3D view.
 * Import, edit, sync, and copy point arrays as JSON.
 * Copy the full solver configuration, including `robotCount`, `holdHeight`, `sheet`, and `formation`.
 * Run `VvcmFk` in the browser and display candidate solution counts, stability labels, object poses, virtual object points, and taut cable indices.
@@ -62,6 +63,8 @@ The default interface language is English. Use the language selector in the head
 Use the index selector in the header to choose 0-based or 1-based display labels. The setting is saved in local browser storage and keeps sheet vertex labels, robot labels, FK solution labels, object marker labels, and taut cable lists consistent.
 
 Use the edit mode control and point tables to choose whether you are editing sheet vertices or robot positions. Drag a point marker or its label to move that point. Drag empty canvas space to pan the view, use the mouse wheel or the `+` and `-` controls to zoom, and use `Fit` to reframe the current geometry and visible FK results.
+
+The 3D view uses the same VVCM coordinates directly with Z as the vertical axis. Each robot ground point is shown as `r_i=(x,y,0)`, each elevated hold point is shown as `p_i=(x,y,holdHeight)`, and each visible FK object point is shown as `po=(x,y,z)`. Orbit, pan, and zoom the 3D view with the mouse or touchpad, and use `Reset` to fit the current scene. In single-solution mode the selected solution's taut cables are drawn from `p_i` to `po`; in all-solutions mode every visible `po` is shown while taut links remain focused on the active solution.
 
 The point tables provide precise numeric editing. The JSON editors accept arrays of `[x, y]` tuples or `{ "x": number, "y": number }` objects. Applying a JSON editor also updates the shared robot count to match the number of parsed points.
 
@@ -132,5 +135,6 @@ src/
   i18n.ts       UI translation dictionaries and locale persistence helpers.
   index.css     Global styles.
   main.tsx      React entry point.
+  RobotScene3D.tsx  Z-up Three.js robot hold-height and FK object visualization.
 vite.config.ts  Vite config, React plugin, and vvcm-rs wasm compatibility.
 ```

@@ -105,6 +105,7 @@
 
 .panel,
 .canvas-panel,
+.scene-panel,
 .result-panel {
   border: 1px solid #d9dfdd;
   border-radius: 8px;
@@ -117,6 +118,7 @@
 }
 
 .canvas-panel,
+.scene-panel,
 .result-panel {
   overflow: hidden;
 }
@@ -560,12 +562,58 @@ button:hover {
   background: #c56a1a;
 }
 
+.legend-item.ground-robot::before {
+  background: #c56a1a;
+}
+
+.legend-item.hold-point::before {
+  background: #007d7a;
+}
+
 .legend-item.stable-solution::before {
   background: #2f7d46;
 }
 
 .legend-item.unstable-solution::before {
   background: #b12d36;
+}
+
+.legend-item.taut-line::before {
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+  background: #d33f49;
+}
+
+.robot-scene-frame {
+  position: relative;
+  width: 100%;
+  min-height: 320px;
+  aspect-ratio: 16 / 9;
+  border-top: 1px solid #e2e7e5;
+  background: #f8faf8;
+}
+
+.robot-scene-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+
+.robot-scene-canvas:active {
+  cursor: grabbing;
+}
+
+.robot-scene-message {
+  position: absolute;
+  inset: 16px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: #506164;
+  text-align: center;
 }
 
 .solution-controls {
@@ -736,6 +784,11 @@ code {
   }
 
   .coordinate-canvas {
+    aspect-ratio: 1 / 1;
+  }
+
+  .robot-scene-frame {
+    min-height: 280px;
     aspect-ratio: 1 / 1;
   }
 }
