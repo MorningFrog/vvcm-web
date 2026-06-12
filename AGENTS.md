@@ -8,6 +8,10 @@ Before making changes to this repository, read `README.md` to understand the pro
 
 Read `CONTRIBUTING.md` before starting development work. It contains important development information, including workflow expectations, coding standards, and Git commit message requirements such as the Conventional Commit format.
 
+## Local Server Testing
+
+After using a local development server for testing, stop it before finishing. The user will start any local server they need themselves.
+
 ## Documentation Updates
 
 When modifying code, also review `README.md`, `AGENTS.md`, `CHANGELOG.md`, `TODO.md` and `CONTRIBUTING.md` to determine whether they need to be updated.

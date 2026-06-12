@@ -35,6 +35,20 @@
   gap: 10px;
 }
 
+.language-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #4a5b5d;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.language-select select {
+  min-width: 112px;
+  background: #ffffff;
+}
+
 .version-pill,
 .panel-heading span {
   min-height: 34px;
@@ -131,14 +145,23 @@
   font-weight: 680;
 }
 
+.field > span {
+  min-height: 2.7em;
+  display: flex;
+  align-items: flex-end;
+  line-height: 1.35;
+}
+
 input,
 textarea,
-button {
+button,
+select {
   font: inherit;
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid #cdd6d4;
@@ -152,6 +175,11 @@ input {
   padding: 0 10px;
 }
 
+select {
+  height: 38px;
+  padding: 0 32px 0 10px;
+}
+
 textarea {
   min-height: 236px;
   resize: vertical;
@@ -163,6 +191,7 @@ textarea {
 
 input:focus,
 textarea:focus,
+select:focus,
 button:focus-visible {
   outline: 3px solid rgba(0, 125, 122, 0.22);
   outline-offset: 2px;
@@ -538,6 +567,10 @@ code {
   .solution-row,
   .editor-actions {
     grid-template-columns: 1fr;
+  }
+
+  .field > span {
+    min-height: 0;
   }
 
   .table-head,

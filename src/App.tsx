@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -12,6 +13,16 @@ import {
   type Point2Input,
 } from '@morningfrog/vvcm-rs'
 import './App.css'
+import {
+  getInitialLocale,
+  localeOptions,
+  storeLocale,
+  translations,
+  type LabelKey,
+  type Locale,
+  type Messages,
+  type ParseErrorCode,
+} from './i18n'
 
 type Point = {
   x: number
@@ -50,10 +61,59 @@ type GridLines = {
   horizontal: number[]
 }
 
+type StatusMessage =
+  | {
+      type: 'ready'
+    }
+  | {
+      type: 'countSet'
+      count: number
+    }
+  | {
+      type: 'pointsApplied'
+      kind: PointKind
+      count: number
+    }
+  | {
+      type: 'textSynced'
+      kind: PointKind
+    }
+  | {
+      type: 'copied'
+      label: LabelKey
+    }
+  | {
+      type: 'copyFailed'
+      message: string
+    }
+  | {
+      type: 'parseError'
+      code: ParseErrorCode
+    }
+  | {
+      type: 'pointCountRange'
+      min: number
+      max: number
+    }
+  | {
+      type: 'error'
+      message: string
+    }
+
 const MIN_ROBOT_COUNT = 3
 const MAX_ROBOT_COUNT = 16
 const DEFAULT_ROBOT_COUNT = 4
 const DEFAULT_HOLD_HEIGHT = 1000
+
+class PointParseError extends Error {
+  code: ParseErrorCode
+
+  constructor(code: ParseErrorCode) {
+    super(code)
+    this.name = 'PointParseError'
+    this.code = code
+  }
+}
 
 const round = (value: number, digits = 2) => {
   const factor = 10 ** digits
@@ -167,18 +227,18 @@ const pointFromUnknown = (value: unknown): Point | null => {
 const parsePointText = (text: string): Point[] => {
   const trimmed = text.trim()
   if (!trimmed) {
-    throw new Error('输入为空')
+    throw new PointParseError('emptyInput')
   }
 
   if (trimmed.startsWith('[')) {
     const parsed = JSON.parse(trimmed) as unknown
     if (!Array.isArray(parsed)) {
-      throw new Error('JSON 根节点需要是数组')
+      throw new PointParseError('jsonRootArray')
     }
 
     const points = parsed.map(pointFromUnknown)
     if (points.some((point) => point === null)) {
-      throw new Error('数组元素需要是 [x, y] 或 { x, y }')
+      throw new PointParseError('invalidPointItem')
     }
 
     return points as Point[]
@@ -201,7 +261,7 @@ const parsePointText = (text: string): Point[] => {
     .filter((point): point is Point => point !== null)
 
   if (!points.length) {
-    throw new Error('没有识别到坐标行')
+    throw new PointParseError('noCoordinateRows')
   }
 
   return points
@@ -276,7 +336,33 @@ const getErrorMessage = (error: unknown) => {
   return String(error)
 }
 
+const formatStatusMessage = (status: StatusMessage, t: Messages) => {
+  switch (status.type) {
+    case 'ready':
+      return t.status.ready
+    case 'countSet':
+      return t.status.countSet(status.count)
+    case 'pointsApplied':
+      return t.status.pointsApplied(t.labels[status.kind], status.count)
+    case 'textSynced':
+      return status.kind === 'sheet'
+        ? t.status.sheetTextSynced
+        : t.status.robotsTextSynced
+    case 'copied':
+      return t.status.copied(t.labels[status.label])
+    case 'copyFailed':
+      return t.status.copyFailed(status.message)
+    case 'parseError':
+      return t.parseErrors[status.code]
+    case 'pointCountRange':
+      return t.status.pointCountRange(status.min, status.max)
+    case 'error':
+      return status.message
+  }
+}
+
 function App() {
+  const [locale, setLocale] = useState<Locale>(() => getInitialLocale())
   const [robotCount, setRobotCount] = useState(DEFAULT_ROBOT_COUNT)
   const [holdHeight, setHoldHeight] = useState(DEFAULT_HOLD_HEIGHT)
   const [sheet, setSheet] = useState<Point[]>(() =>
@@ -288,7 +374,7 @@ function App() {
   const [selectedKind, setSelectedKind] = useState<PointKind>('sheet')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [dragging, setDragging] = useState<DragState | null>(null)
-  const [status, setStatus] = useState('准备就绪')
+  const [status, setStatus] = useState<StatusMessage>({ type: 'ready' })
   const [sheetText, setSheetText] = useState(() =>
     pointsToJson(makeInitialSheet(DEFAULT_ROBOT_COUNT)),
   )
@@ -302,12 +388,19 @@ function App() {
   const currentRobotsText = useMemo(() => pointsToJson(robots), [robots])
   const visibleSheetText = sheetTextDirty ? sheetText : currentSheetText
   const visibleRobotsText = robotsTextDirty ? robotsText : currentRobotsText
+  const t = translations[locale]
+  const statusText = formatStatusMessage(status, t)
+
+  useEffect(() => {
+    document.documentElement.lang = locale
+    storeLocale(locale)
+  }, [locale])
 
   const solveState = useMemo<SolveState>(() => {
     if (sheet.length !== robotCount || robots.length !== robotCount) {
       return {
         status: 'error',
-        message: '布顶点数量和机器人数量需要一致',
+        message: t.errors.mismatchedCounts,
       }
     }
 
@@ -329,7 +422,7 @@ function App() {
         message: getErrorMessage(error),
       }
     }
-  }, [holdHeight, robotCount, robots, sheet])
+  }, [holdHeight, robotCount, robots, sheet, t])
 
   const activeSolution =
     solveState.status === 'ok' ? solveState.solution : null
@@ -383,7 +476,7 @@ function App() {
     setSheet((current) => resizePoints(current, nextCount, 'sheet'))
     setRobots((current) => resizePoints(current, nextCount, 'robots'))
     setSelectedIndex((current) => Math.min(current, nextCount - 1))
-    setStatus(`数量已设置为 ${nextCount}`)
+    setStatus({ type: 'countSet', count: nextCount })
   }
 
   const handleHoldHeightChange = (value: number) => {
@@ -504,9 +597,12 @@ function App() {
         parsed.length < MIN_ROBOT_COUNT ||
         parsed.length > MAX_ROBOT_COUNT
       ) {
-        throw new Error(
-          `点数量需要在 ${MIN_ROBOT_COUNT} 到 ${MAX_ROBOT_COUNT} 之间`,
-        )
+        setStatus({
+          type: 'pointCountRange',
+          min: MIN_ROBOT_COUNT,
+          max: MAX_ROBOT_COUNT,
+        })
+        return
       }
 
       setRobotCount(parsed.length)
@@ -524,11 +620,13 @@ function App() {
         setRobotsTextDirty(false)
       }
 
-      setStatus(
-        `${kind === 'sheet' ? '布顶点' : '机器人位置'}已应用，数量 ${parsed.length}`,
-      )
+      setStatus({ type: 'pointsApplied', kind, count: parsed.length })
     } catch (error) {
-      setStatus(getErrorMessage(error))
+      if (error instanceof PointParseError) {
+        setStatus({ type: 'parseError', code: error.code })
+      } else {
+        setStatus({ type: 'error', message: getErrorMessage(error) })
+      }
     }
   }
 
@@ -536,26 +634,26 @@ function App() {
     if (kind === 'sheet') {
       setSheetText(currentSheetText)
       setSheetTextDirty(false)
-      setStatus('布顶点文本已同步')
+      setStatus({ type: 'textSynced', kind })
     } else {
       setRobotsText(currentRobotsText)
       setRobotsTextDirty(false)
-      setStatus('机器人文本已同步')
+      setStatus({ type: 'textSynced', kind })
     }
   }
 
-  const copyText = async (label: string, text: string) => {
+  const copyText = async (label: LabelKey, text: string) => {
     try {
       await navigator.clipboard.writeText(text)
-      setStatus(`${label} 已复制`)
+      setStatus({ type: 'copied', label })
     } catch (error) {
-      setStatus(`复制失败：${getErrorMessage(error)}`)
+      setStatus({ type: 'copyFailed', message: getErrorMessage(error) })
     }
   }
 
   const copyAllConfig = () =>
     copyText(
-      '完整配置',
+      'allConfig',
       allConfigToJson(robotCount, holdHeight, sheet, robots),
     )
 
@@ -563,27 +661,41 @@ function App() {
     <main className="app-shell">
       <header className="app-header">
         <div>
-          <p className="eyebrow">VVCM wasm visual test bench</p>
-          <h1>VVCM 可视化测试台</h1>
+          <p className="eyebrow">{t.header.eyebrow}</p>
+          <h1>{t.header.title}</h1>
         </div>
         <div className="header-actions">
+          <label className="language-select">
+            <span>{t.language.selectorLabel}</span>
+            <select
+              aria-label={t.language.ariaLabel}
+              value={locale}
+              onChange={(event) => setLocale(event.currentTarget.value as Locale)}
+            >
+              {localeOptions.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <button type="button" className="secondary-button" onClick={copyAllConfig}>
-            复制全部配置
+            {t.header.copyAllConfig}
           </button>
           <div className="version-pill">vvcm-rs {version()}</div>
         </div>
       </header>
 
       <section className="workspace">
-        <aside className="control-column" aria-label="参数控制">
+        <aside className="control-column" aria-label={t.controls.ariaLabel}>
           <section className="panel">
             <div className="panel-heading">
-              <h2>参数</h2>
-              <span>{robotCount} 点</span>
+              <h2>{t.controls.title}</h2>
+              <span>{t.controls.pointCount(robotCount)}</span>
             </div>
             <div className="field-grid">
               <label className="field">
-                <span>机器人 / 布顶点数量</span>
+                <span>{t.controls.robotCountLabel}</span>
                 <input
                   type="number"
                   min={MIN_ROBOT_COUNT}
@@ -596,7 +708,7 @@ function App() {
                 />
               </label>
               <label className="field">
-                <span>hold 高度</span>
+                <span>{t.controls.holdHeightLabel}</span>
                 <input
                   type="number"
                   min={0}
@@ -608,20 +720,20 @@ function App() {
                 />
               </label>
             </div>
-            <div className="mode-row" role="group" aria-label="编辑对象">
+            <div className="mode-row" role="group" aria-label={t.controls.editTargetAriaLabel}>
               <button
                 type="button"
                 className={selectedKind === 'sheet' ? 'active' : ''}
                 onClick={() => setSelectedKind('sheet')}
               >
-                布顶点
+                {t.controls.sheetButton}
               </button>
               <button
                 type="button"
                 className={selectedKind === 'robots' ? 'active' : ''}
                 onClick={() => setSelectedKind('robots')}
               >
-                机器人
+                {t.controls.robotsButton}
               </button>
             </div>
             <div className="selected-point">
@@ -662,7 +774,8 @@ function App() {
           </section>
 
           <PointTable
-            title="柔性布顶点"
+            pointHeader={t.controls.tablePointHeader}
+            title={t.controls.sheetTableTitle}
             prefix="S"
             kind="sheet"
             points={sheet}
@@ -676,7 +789,8 @@ function App() {
           />
 
           <PointTable
-            title="机器人位置"
+            pointHeader={t.controls.tablePointHeader}
+            title={t.controls.robotTableTitle}
             prefix="R"
             kind="robots"
             points={robots}
@@ -694,13 +808,13 @@ function App() {
           <section className="canvas-panel">
             <div className="panel-heading canvas-heading">
               <div>
-                <h2>坐标画布</h2>
-                <span>当前选择 {selectedLabel}</span>
+                <h2>{t.canvas.title}</h2>
+                <span>{t.canvas.currentSelection(selectedLabel)}</span>
               </div>
-              <div className="legend" aria-label="图例">
-                <span className="legend-item sheet">布顶点</span>
-                <span className="legend-item robot">机器人</span>
-                <span className="legend-item object">物体</span>
+              <div className="legend" aria-label={t.canvas.legendAriaLabel}>
+                <span className="legend-item sheet">{t.canvas.sheetLegend}</span>
+                <span className="legend-item robot">{t.canvas.robotLegend}</span>
+                <span className="legend-item object">{t.canvas.objectLegend}</span>
               </div>
             </div>
             <svg
@@ -708,7 +822,7 @@ function App() {
               className="coordinate-canvas"
               viewBox={viewBoxText}
               role="img"
-              aria-label="VVCM 坐标画布"
+              aria-label={t.canvas.ariaLabel}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
@@ -874,11 +988,11 @@ function App() {
 
           <section className="result-panel">
             <div className="panel-heading">
-              <h2>FK 结果</h2>
+              <h2>{t.results.title}</h2>
               <span className={solveState.status === 'ok' ? 'ok' : 'error'}>
                 {solveState.status === 'ok'
-                  ? `${solveState.result.stableCount}/${solveState.result.allCount} 稳定`
-                  : '求解异常'}
+                  ? t.results.stableCount(solveState.result.stableCount, solveState.result.allCount)
+                  : t.results.solveError}
               </span>
             </div>
             {solveState.status === 'ok' ? (
@@ -898,7 +1012,7 @@ function App() {
                     </div>
                   ))
                 ) : (
-                  <p className="empty-state">没有稳定解</p>
+                  <p className="empty-state">{t.results.noStableSolutions}</p>
                 )}
               </div>
             ) : (
@@ -907,9 +1021,14 @@ function App() {
           </section>
         </section>
 
-        <aside className="data-column" aria-label="文本数据">
+        <aside className="data-column" aria-label={t.data.ariaLabel}>
           <DataEditor
-            title="布顶点 JSON"
+            applyLabel={t.data.apply}
+            copyLabel={t.data.copy}
+            dirtyLabel={t.data.dirty}
+            syncedLabel={t.data.synced}
+            syncLabel={t.data.sync}
+            title={t.data.sheetJsonTitle}
             value={visibleSheetText}
             dirty={sheetTextDirty}
             onChange={(value) => {
@@ -918,11 +1037,16 @@ function App() {
             }}
             onApply={() => applyPointText('sheet')}
             onSync={() => syncPointText('sheet')}
-            onCopy={() => copyText('布顶点', pointsToJson(sheet))}
+            onCopy={() => copyText('sheet', pointsToJson(sheet))}
           />
 
           <DataEditor
-            title="机器人 JSON"
+            applyLabel={t.data.apply}
+            copyLabel={t.data.copy}
+            dirtyLabel={t.data.dirty}
+            syncedLabel={t.data.synced}
+            syncLabel={t.data.sync}
+            title={t.data.robotsJsonTitle}
             value={visibleRobotsText}
             dirty={robotsTextDirty}
             onChange={(value) => {
@@ -931,14 +1055,14 @@ function App() {
             }}
             onApply={() => applyPointText('robots')}
             onSync={() => syncPointText('robots')}
-            onCopy={() => copyText('机器人位置', pointsToJson(robots))}
+            onCopy={() => copyText('robots', pointsToJson(robots))}
           />
 
           <section className="panel status-panel">
             <div className="panel-heading">
-              <h2>状态</h2>
+              <h2>{t.data.statusTitle}</h2>
             </div>
-            <p>{status}</p>
+            <p>{statusText}</p>
           </section>
         </aside>
       </section>
@@ -947,12 +1071,13 @@ function App() {
 }
 
 type PointTableProps = {
-  title: string
-  prefix: string
   kind: PointKind
+  pointHeader: string
   points: Point[]
+  prefix: string
   selectedKind: PointKind
   selectedIndex: number
+  title: string
   onSelect: (index: number) => void
   onChange: (
     kind: PointKind,
@@ -963,12 +1088,13 @@ type PointTableProps = {
 }
 
 function PointTable({
-  title,
-  prefix,
   kind,
+  pointHeader,
   points,
+  prefix,
   selectedKind,
   selectedIndex,
+  title,
   onSelect,
   onChange,
 }: PointTableProps) {
@@ -979,7 +1105,7 @@ function PointTable({
         <span>{points.length}</span>
       </div>
       <div className="table-head">
-        <span>点</span>
+        <span>{pointHeader}</span>
         <span>X</span>
         <span>Y</span>
       </div>
@@ -1036,9 +1162,14 @@ function PointTable({
 }
 
 type DataEditorProps = {
+  applyLabel: string
+  copyLabel: string
+  dirty: boolean
+  dirtyLabel: string
+  syncedLabel: string
+  syncLabel: string
   title: string
   value: string
-  dirty: boolean
   onChange: (value: string) => void
   onApply: () => void
   onSync: () => void
@@ -1046,9 +1177,14 @@ type DataEditorProps = {
 }
 
 function DataEditor({
+  applyLabel,
+  copyLabel,
+  dirty,
+  dirtyLabel,
+  syncedLabel,
+  syncLabel,
   title,
   value,
-  dirty,
   onChange,
   onApply,
   onSync,
@@ -1058,7 +1194,7 @@ function DataEditor({
     <section className="panel data-editor">
       <div className="panel-heading">
         <h2>{title}</h2>
-        <span>{dirty ? '已编辑' : '已同步'}</span>
+        <span>{dirty ? dirtyLabel : syncedLabel}</span>
       </div>
       <textarea
         spellCheck={false}
@@ -1067,13 +1203,13 @@ function DataEditor({
       />
       <div className="editor-actions">
         <button type="button" className="primary-button" onClick={onApply}>
-          应用
+          {applyLabel}
         </button>
         <button type="button" className="secondary-button" onClick={onSync}>
-          同步
+          {syncLabel}
         </button>
         <button type="button" className="secondary-button" onClick={onCopy}>
-          复制
+          {copyLabel}
         </button>
       </div>
     </section>

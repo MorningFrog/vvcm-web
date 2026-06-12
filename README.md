@@ -12,6 +12,7 @@ VVCM Web is a React, TypeScript, and Vite visual test bench for the `@morningfro
 * Copy the full solver configuration, including `robotCount`, `holdHeight`, `sheet`, and `formation`.
 * Run `VvcmFk` in the browser and display stable solution counts, object pose, and taut cable indices.
 * Visualize the sheet polygon, robot formation, cable lines, taut cables, and selected object position.
+* Switch the interface language between Simplified Chinese and English.
 
 ## Requirements
 
@@ -53,6 +54,8 @@ npm run lint
 ## Usage
 
 Use the parameter panel to set the robot count and hold height. The robot count is clamped to the supported UI range and keeps the sheet vertex count and robot position count aligned.
+
+The default interface language is English. Use the language selector in the header to switch between English and Simplified Chinese. The selected language is saved in local browser storage and reused on the next visit.
 
 Use the edit mode control to choose whether canvas clicks edit sheet vertices or robot positions. Drag a point marker or its label to move that point. Clicking the canvas moves the currently selected point to the clicked coordinate.
 
@@ -122,6 +125,7 @@ The Vite dependency optimizer excludes `@morningfrog/vvcm-rs` so the same wasm c
 src/
   App.tsx       Main VVCM visual test bench UI and solver integration.
   App.css       Test bench layout, canvas, and control styling.
+  i18n.ts       UI translation dictionaries and locale persistence helpers.
   index.css     Global styles.
   main.tsx      React entry point.
 vite.config.ts  Vite config, React plugin, and vvcm-rs wasm compatibility.
