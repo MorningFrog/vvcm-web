@@ -1,6 +1,6 @@
-import { defineConfig, normalizePath, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { readFileSync } from 'node:fs'
+import { defineConfig, normalizePath, type Plugin } from 'vite'
 
 const vvcmWasmPrefix = '\0vvcm-wasm-bindgen:'
 
@@ -56,4 +56,5 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['@morningfrog/vvcm-rs'],
   },
+  base: '/vvcm-web/',
 })

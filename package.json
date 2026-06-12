@@ -1,5 +1,6 @@
 {
   "name": "vvcm-web",
+  "description": "A visual test bench for inspecting VVCM kinematics in multi-robot transporting systems with a deformable sheet.",
   "private": true,
   "version": "1.0.0",
   "type": "module",
