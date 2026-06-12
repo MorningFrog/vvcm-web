@@ -5,7 +5,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   box-sizing: border-box;
   overflow: hidden;
-  padding: 24px;
+  padding: 8px 24px 0;
 }
 
 .app-header {
@@ -115,6 +115,7 @@
   flex-direction: column;
   gap: 16px;
   padding-right: 2px;
+  padding-bottom: 24px;
 }
 
 .control-column > *,
@@ -895,7 +896,7 @@ code {
     height: auto;
     min-height: 100svh;
     overflow: visible;
-    padding: 16px;
+    padding: 8px 16px 0;
   }
 
   .app-header {
@@ -917,6 +918,7 @@ code {
   .result-column {
     overflow: visible;
     padding-right: 0;
+    padding-bottom: 16px;
   }
 
   .coordinate-canvas {
@@ -931,7 +933,7 @@ code {
 
 @media (max-width: 560px) {
   .app-shell {
-    padding: 10px;
+    padding: 6px 10px 0;
   }
 
   .app-header h1 {
