@@ -26,12 +26,16 @@ export const translations = {
     canvas: {
       ariaLabel: 'VVCM 坐标画布',
       currentSelection: (label: string) => `当前选择 ${label}`,
+      fitView: '适配',
       legendAriaLabel: '图例',
       robotLegend: '机器人',
       sheetLegend: '布顶点',
       stableSolutionLegend: '稳定解',
       title: '坐标画布',
       unstableSolutionLegend: '不稳定解',
+      viewControlsAriaLabel: '画布视图控制',
+      zoomIn: '放大',
+      zoomOut: '缩小',
     },
     results: {
       allDisplay: '全部',
@@ -111,12 +115,16 @@ export const translations = {
     canvas: {
       ariaLabel: 'VVCM coordinate canvas',
       currentSelection: (label: string) => `Current selection ${label}`,
+      fitView: 'Fit',
       legendAriaLabel: 'Legend',
       robotLegend: 'Robots',
       sheetLegend: 'Sheet vertices',
       stableSolutionLegend: 'Stable solution',
       title: 'Coordinate Canvas',
       unstableSolutionLegend: 'Unstable solution',
+      viewControlsAriaLabel: 'Canvas view controls',
+      zoomIn: 'Zoom in',
+      zoomOut: 'Zoom out',
     },
     results: {
       allDisplay: 'All',

@@ -8,6 +8,7 @@ VVCM Web is a React, TypeScript, and Vite visual test bench for the `@morningfro
 * Configure the robot hold height used by the VVCM solver.
 * Edit deformable sheet vertices and robot positions in coordinate tables.
 * Drag sheet vertices and robot positions directly on an SVG coordinate canvas.
+* Pan and zoom the coordinate canvas manually, with a fit-view control to reframe the current geometry.
 * Import, edit, sync, and copy point arrays as JSON.
 * Copy the full solver configuration, including `robotCount`, `holdHeight`, `sheet`, and `formation`.
 * Run `VvcmFk` in the browser and display candidate solution counts, stability labels, object poses, virtual object points, and taut cable indices.
@@ -57,7 +58,7 @@ Use the parameter panel to set the robot count and hold height. The robot count 
 
 The default interface language is English. Use the language selector in the header to switch between English and Simplified Chinese. The selected language is saved in local browser storage and reused on the next visit.
 
-Use the edit mode control to choose whether canvas clicks edit sheet vertices or robot positions. Drag a point marker or its label to move that point. Clicking the canvas moves the currently selected point to the clicked coordinate.
+Use the edit mode control and point tables to choose whether you are editing sheet vertices or robot positions. Drag a point marker or its label to move that point. Drag empty canvas space to pan the view, use the mouse wheel or the `+` and `-` controls to zoom, and use `Fit` to reframe the current geometry and visible FK results.
 
 The point tables provide precise numeric editing. The JSON editors accept arrays of `[x, y]` tuples or `{ "x": number, "y": number }` objects. Applying a JSON editor also updates the shared robot count to match the number of parsed points.
 

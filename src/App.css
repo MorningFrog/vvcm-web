@@ -131,6 +131,41 @@
   font-size: 13px;
 }
 
+.canvas-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.canvas-tools {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid #dce3e1;
+  border-radius: 7px;
+  background: #eef4f3;
+}
+
+.canvas-tools button {
+  min-width: 34px;
+  min-height: 32px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0 9px;
+  background: transparent;
+  font-size: 13px;
+}
+
+.canvas-tools button:hover {
+  background: #ffffff;
+}
+
+.fit-view-button {
+  min-width: 48px;
+}
+
 .field-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -328,7 +363,21 @@ button:hover {
 
 .canvas-hit-area {
   fill: transparent;
-  cursor: crosshair;
+  cursor: grab;
+}
+
+.coordinate-canvas.panning,
+.coordinate-canvas.panning .canvas-hit-area {
+  cursor: grabbing;
+}
+
+.coordinate-canvas.point-dragging .sheet-points .point-hit-target,
+.coordinate-canvas.point-dragging .robot-points .point-hit-target,
+.coordinate-canvas.point-dragging .sheet-points .point-marker,
+.coordinate-canvas.point-dragging .robot-points .point-marker,
+.coordinate-canvas.point-dragging .sheet-points text,
+.coordinate-canvas.point-dragging .robot-points text {
+  cursor: grabbing;
 }
 
 .grid-lines line {
@@ -684,5 +733,14 @@ code {
   .canvas-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .canvas-heading-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .legend {
+    justify-content: flex-start;
   }
 }

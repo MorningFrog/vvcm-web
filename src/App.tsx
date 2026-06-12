@@ -7,6 +7,7 @@ import {
 } from '@morningfrog/vvcm-rs'
 import {
   Fragment,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -35,12 +36,24 @@ type PointKind = 'sheet' | 'robots'
 
 type SolutionDisplayMode = 'single' | 'all'
 
-type DragState = {
+type PointDragState = {
+  type: 'point'
   kind: PointKind
   index: number
   offsetX: number
   offsetY: number
+  pointerId: number
 }
+
+type PanDragState = {
+  type: 'pan'
+  pointerId: number
+  startClientX: number
+  startClientY: number
+  startViewBox: ViewBox
+}
+
+type CanvasInteraction = PointDragState | PanDragState
 
 type SolveState =
   | {
@@ -69,7 +82,7 @@ type GridLines = {
   horizontal: number[]
 }
 
-type CanvasTextMetrics = {
+type CanvasMetrics = {
   labelSize: number
   statusSize: number
   labelStroke: number
@@ -80,6 +93,14 @@ type CanvasTextMetrics = {
   objectTitleYOffset: number
   objectStatusYOffset: number
   virtualObjectTitleYOffset: number
+  sheetHitRadius: number
+  robotHitRadius: number
+  sheetMarkerRadius: number
+  sheetActiveMarkerRadius: number
+  robotMarkerRadius: number
+  robotActiveMarkerRadius: number
+  objectRadius: number
+  virtualObjectRadius: number
 }
 
 type StatusMessage =
@@ -143,7 +164,11 @@ const round = (value: number, digits = 2) => {
 }
 
 const DEFAULT_CANVAS_UNITS_PER_PIXEL = 3
-const CANVAS_TEXT_TARGETS = {
+const MIN_VIEWBOX_SPAN = 20
+const MAX_VIEWBOX_SPAN = 200_000
+const ZOOM_IN_FACTOR = 0.82
+const ZOOM_OUT_FACTOR = 1 / ZOOM_IN_FACTOR
+const CANVAS_METRIC_TARGETS = {
   labelSize: 16,
   statusSize: 13,
   labelStroke: 3,
@@ -154,38 +179,56 @@ const CANVAS_TEXT_TARGETS = {
   objectTitleYOffset: -11,
   objectStatusYOffset: 4,
   virtualObjectTitleYOffset: 4,
-} satisfies CanvasTextMetrics
+  sheetHitRadius: 20,
+  robotHitRadius: 22,
+  sheetMarkerRadius: 7,
+  sheetActiveMarkerRadius: 9,
+  robotMarkerRadius: 8,
+  robotActiveMarkerRadius: 10,
+  objectRadius: 10,
+  virtualObjectRadius: 9,
+} satisfies CanvasMetrics
 
-const scaleCanvasTextMetrics = (
-  unitsPerPixel: number,
-): CanvasTextMetrics => {
+const scaleCanvasMetrics = (unitsPerPixel: number): CanvasMetrics => {
   const scale = (value: number) => round(value * unitsPerPixel, 2)
 
   return {
-    labelSize: scale(CANVAS_TEXT_TARGETS.labelSize),
-    statusSize: scale(CANVAS_TEXT_TARGETS.statusSize),
-    labelStroke: scale(CANVAS_TEXT_TARGETS.labelStroke),
-    pointLabelXOffset: scale(CANVAS_TEXT_TARGETS.pointLabelXOffset),
-    sheetLabelYOffset: scale(CANVAS_TEXT_TARGETS.sheetLabelYOffset),
-    robotLabelYOffset: scale(CANVAS_TEXT_TARGETS.robotLabelYOffset),
-    objectLabelXOffset: scale(CANVAS_TEXT_TARGETS.objectLabelXOffset),
-    objectTitleYOffset: scale(CANVAS_TEXT_TARGETS.objectTitleYOffset),
-    objectStatusYOffset: scale(CANVAS_TEXT_TARGETS.objectStatusYOffset),
+    labelSize: scale(CANVAS_METRIC_TARGETS.labelSize),
+    statusSize: scale(CANVAS_METRIC_TARGETS.statusSize),
+    labelStroke: scale(CANVAS_METRIC_TARGETS.labelStroke),
+    pointLabelXOffset: scale(CANVAS_METRIC_TARGETS.pointLabelXOffset),
+    sheetLabelYOffset: scale(CANVAS_METRIC_TARGETS.sheetLabelYOffset),
+    robotLabelYOffset: scale(CANVAS_METRIC_TARGETS.robotLabelYOffset),
+    objectLabelXOffset: scale(CANVAS_METRIC_TARGETS.objectLabelXOffset),
+    objectTitleYOffset: scale(CANVAS_METRIC_TARGETS.objectTitleYOffset),
+    objectStatusYOffset: scale(CANVAS_METRIC_TARGETS.objectStatusYOffset),
     virtualObjectTitleYOffset: scale(
-      CANVAS_TEXT_TARGETS.virtualObjectTitleYOffset,
+      CANVAS_METRIC_TARGETS.virtualObjectTitleYOffset,
     ),
+    sheetHitRadius: scale(CANVAS_METRIC_TARGETS.sheetHitRadius),
+    robotHitRadius: scale(CANVAS_METRIC_TARGETS.robotHitRadius),
+    sheetMarkerRadius: scale(CANVAS_METRIC_TARGETS.sheetMarkerRadius),
+    sheetActiveMarkerRadius: scale(
+      CANVAS_METRIC_TARGETS.sheetActiveMarkerRadius,
+    ),
+    robotMarkerRadius: scale(CANVAS_METRIC_TARGETS.robotMarkerRadius),
+    robotActiveMarkerRadius: scale(
+      CANVAS_METRIC_TARGETS.robotActiveMarkerRadius,
+    ),
+    objectRadius: scale(CANVAS_METRIC_TARGETS.objectRadius),
+    virtualObjectRadius: scale(CANVAS_METRIC_TARGETS.virtualObjectRadius),
   }
 }
 
-const DEFAULT_CANVAS_TEXT_METRICS = scaleCanvasTextMetrics(
+const DEFAULT_CANVAS_METRICS = scaleCanvasMetrics(
   DEFAULT_CANVAS_UNITS_PER_PIXEL,
 )
 
-const sameCanvasTextMetrics = (
-  current: CanvasTextMetrics,
-  next: CanvasTextMetrics,
+const sameCanvasMetrics = (
+  current: CanvasMetrics,
+  next: CanvasMetrics,
 ) =>
-  (Object.keys(next) as Array<keyof CanvasTextMetrics>).every(
+  (Object.keys(next) as Array<keyof CanvasMetrics>).every(
     (key) => current[key] === next[key],
   )
 
@@ -366,6 +409,30 @@ const buildViewBox = (points: Point[]): ViewBox => {
   }
 }
 
+const scaleViewBox = (
+  viewBox: ViewBox,
+  factor: number,
+  anchor: { x: number; y: number },
+): ViewBox => {
+  const currentSpan = Math.max(viewBox.width, viewBox.height)
+  const nextSpan = currentSpan * factor
+  const safeFactor =
+    nextSpan < MIN_VIEWBOX_SPAN
+      ? MIN_VIEWBOX_SPAN / currentSpan
+      : nextSpan > MAX_VIEWBOX_SPAN
+        ? MAX_VIEWBOX_SPAN / currentSpan
+        : factor
+  const nextWidth = viewBox.width * safeFactor
+  const nextHeight = viewBox.height * safeFactor
+
+  return {
+    minX: round(anchor.x - (anchor.x - viewBox.minX) * safeFactor),
+    minY: round(anchor.y - (anchor.y - viewBox.minY) * safeFactor),
+    width: round(nextWidth),
+    height: round(nextHeight),
+  }
+}
+
 const makeGrid = (viewBox: ViewBox): GridLines => {
   const targetLines = 9
   const rawStep = Math.max(viewBox.width, viewBox.height) / targetLines
@@ -451,10 +518,12 @@ function App() {
     useState<SolutionDisplayMode>('single')
   const [selectedSolutionIndex, setSelectedSolutionIndex] =
     useState<number | null>(null)
-  const [dragging, setDragging] = useState<DragState | null>(null)
+  const [canvasInteraction, setCanvasInteraction] =
+    useState<CanvasInteraction | null>(null)
   const [status, setStatus] = useState<StatusMessage>({ type: 'ready' })
-  const [canvasTextMetrics, setCanvasTextMetrics] =
-    useState<CanvasTextMetrics>(DEFAULT_CANVAS_TEXT_METRICS)
+  const [canvasMetrics, setCanvasMetrics] = useState<CanvasMetrics>(
+    DEFAULT_CANVAS_METRICS,
+  )
   const [sheetText, setSheetText] = useState(() =>
     pointsToJson(makeInitialSheet(DEFAULT_ROBOT_COUNT)),
   )
@@ -561,17 +630,19 @@ function App() {
     return points
   }, [displayedSolutionEntries, robots, sheet])
 
-  const viewBox = useMemo(() => buildViewBox(canvasPoints), [canvasPoints])
+  const [viewBox, setViewBox] = useState<ViewBox>(() =>
+    buildViewBox(canvasPoints),
+  )
   const grid = useMemo(() => makeGrid(viewBox), [viewBox])
   const viewBoxText = `${viewBox.minX} ${viewBox.minY} ${viewBox.width} ${viewBox.height}`
   const canvasStyle = useMemo(
     () =>
       ({
-        '--canvas-label-size': `${canvasTextMetrics.labelSize}px`,
-        '--canvas-status-size': `${canvasTextMetrics.statusSize}px`,
-        '--canvas-label-stroke': `${canvasTextMetrics.labelStroke}px`,
+        '--canvas-label-size': `${canvasMetrics.labelSize}px`,
+        '--canvas-status-size': `${canvasMetrics.statusSize}px`,
+        '--canvas-label-stroke': `${canvasMetrics.labelStroke}px`,
       }) as CSSProperties,
-    [canvasTextMetrics],
+    [canvasMetrics],
   )
   const selectedPoints = selectedKind === 'sheet' ? sheet : robots
   const selectedPoint = selectedPoints[selectedIndex] ?? selectedPoints[0]
@@ -583,7 +654,7 @@ function App() {
       return
     }
 
-    const updateCanvasTextMetrics = () => {
+    const updateCanvasMetrics = () => {
       const { height, width } = svg.getBoundingClientRect()
       if (!height || !width) {
         return
@@ -593,25 +664,25 @@ function App() {
         viewBox.width / width,
         viewBox.height / height,
       )
-      const nextMetrics = scaleCanvasTextMetrics(unitsPerPixel)
+      const nextMetrics = scaleCanvasMetrics(unitsPerPixel)
 
-      setCanvasTextMetrics((current) =>
-        sameCanvasTextMetrics(current, nextMetrics) ? current : nextMetrics,
+      setCanvasMetrics((current) =>
+        sameCanvasMetrics(current, nextMetrics) ? current : nextMetrics,
       )
     }
 
-    updateCanvasTextMetrics()
+    updateCanvasMetrics()
 
     if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateCanvasTextMetrics)
-      return () => window.removeEventListener('resize', updateCanvasTextMetrics)
+      window.addEventListener('resize', updateCanvasMetrics)
+      return () => window.removeEventListener('resize', updateCanvasMetrics)
     }
 
-    const resizeObserver = new ResizeObserver(updateCanvasTextMetrics)
+    const resizeObserver = new ResizeObserver(updateCanvasMetrics)
     resizeObserver.observe(svg)
 
     return () => resizeObserver.disconnect()
-  }, [viewBox])
+  }, [viewBox.height, viewBox.width])
 
   const updatePoint = (kind: PointKind, index: number, point: Point) => {
     const safePoint = { x: round(point.x), y: round(point.y) }
@@ -652,7 +723,7 @@ function App() {
     setHoldHeight(round(Math.max(0, value)))
   }
 
-  const getCanvasPoint = (event: PointerEvent<SVGElement>): Point | null => {
+  const getSvgPoint = useCallback((clientX: number, clientY: number) => {
     const svg = svgRef.current
     const matrix = svg?.getScreenCTM()
     if (!svg || !matrix) {
@@ -660,10 +731,16 @@ function App() {
     }
 
     const point = svg.createSVGPoint()
-    point.x = event.clientX
-    point.y = event.clientY
-    const transformed = point.matrixTransform(matrix.inverse())
-    return { x: round(transformed.x), y: round(-transformed.y) }
+    point.x = clientX
+    point.y = clientY
+    return point.matrixTransform(matrix.inverse())
+  }, [])
+
+  const getCanvasPoint = (event: PointerEvent<SVGElement>): Point | null => {
+    const transformed = getSvgPoint(event.clientX, event.clientY)
+    return transformed
+      ? { x: round(transformed.x), y: round(-transformed.y) }
+      : null
   }
 
   const getPointByKind = (kind: PointKind, index: number) => {
@@ -672,17 +749,17 @@ function App() {
   }
 
   const handleCanvasPointerDown = (event: PointerEvent<SVGRectElement>) => {
-    const point = getCanvasPoint(event)
-    if (!point) {
+    if (!svgRef.current) {
       return
     }
 
-    updatePoint(selectedKind, selectedIndex, point)
-    setDragging({
-      kind: selectedKind,
-      index: selectedIndex,
-      offsetX: 0,
-      offsetY: 0,
+    event.preventDefault()
+    setCanvasInteraction({
+      type: 'pan',
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startViewBox: viewBox,
     })
     svgRef.current?.setPointerCapture(event.pointerId)
   }
@@ -700,38 +777,109 @@ function App() {
 
       setSelectedKind(kind)
       setSelectedIndex(index)
-      setDragging({
+      setCanvasInteraction({
+        type: 'point',
         kind,
         index,
         offsetX: currentPoint.x - pointerPoint.x,
         offsetY: currentPoint.y - pointerPoint.y,
+        pointerId: event.pointerId,
       })
       svgRef.current?.setPointerCapture(event.pointerId)
     }
 
   const handlePointerMove = (event: PointerEvent<SVGSVGElement>) => {
-    if (!dragging) {
+    if (!canvasInteraction || canvasInteraction.pointerId !== event.pointerId) {
       return
     }
 
-    const point = getCanvasPoint(event)
-    if (point) {
-      updatePoint(dragging.kind, dragging.index, {
-        x: point.x + dragging.offsetX,
-        y: point.y + dragging.offsetY,
-      })
+    if (canvasInteraction.type === 'point') {
+      const point = getCanvasPoint(event)
+      if (point) {
+        updatePoint(canvasInteraction.kind, canvasInteraction.index, {
+          x: point.x + canvasInteraction.offsetX,
+          y: point.y + canvasInteraction.offsetY,
+        })
+      }
+      return
     }
+
+    const svg = svgRef.current
+    const bounds = svg?.getBoundingClientRect()
+    if (!bounds || !bounds.width || !bounds.height) {
+      return
+    }
+
+    const unitsPerPixel = Math.max(
+      canvasInteraction.startViewBox.width / bounds.width,
+      canvasInteraction.startViewBox.height / bounds.height,
+    )
+    const deltaX =
+      (event.clientX - canvasInteraction.startClientX) * unitsPerPixel
+    const deltaY =
+      (event.clientY - canvasInteraction.startClientY) * unitsPerPixel
+
+    setViewBox({
+      ...canvasInteraction.startViewBox,
+      minX: round(canvasInteraction.startViewBox.minX - deltaX),
+      minY: round(canvasInteraction.startViewBox.minY - deltaY),
+    })
   }
 
   const handlePointerUp = (event: PointerEvent<SVGSVGElement>) => {
-    if (!dragging) {
+    if (!canvasInteraction || canvasInteraction.pointerId !== event.pointerId) {
       return
     }
 
-    setDragging(null)
+    setCanvasInteraction(null)
     if (svgRef.current?.hasPointerCapture(event.pointerId)) {
       svgRef.current.releasePointerCapture(event.pointerId)
     }
+  }
+
+  const handleCanvasWheel = useCallback((event: WheelEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (event.deltaY === 0) {
+      return
+    }
+
+    const anchor = getSvgPoint(event.clientX, event.clientY)
+    if (!anchor) {
+      return
+    }
+
+    setViewBox((current) =>
+      scaleViewBox(
+        current,
+        event.deltaY < 0 ? ZOOM_IN_FACTOR : ZOOM_OUT_FACTOR,
+        anchor,
+      ),
+    )
+  }, [getSvgPoint])
+
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg) {
+      return
+    }
+
+    svg.addEventListener('wheel', handleCanvasWheel, { passive: false })
+    return () => svg.removeEventListener('wheel', handleCanvasWheel)
+  }, [handleCanvasWheel])
+
+  const zoomAtCenter = (factor: number) => {
+    setViewBox((current) =>
+      scaleViewBox(current, factor, {
+        x: current.minX + current.width / 2,
+        y: current.minY + current.height / 2,
+      }),
+    )
+  }
+
+  const fitCanvasView = () => {
+    setViewBox(buildViewBox(canvasPoints))
   }
 
   const handlePointTableChange = (
@@ -976,20 +1124,53 @@ function App() {
                 <h2>{t.canvas.title}</h2>
                 <span>{t.canvas.currentSelection(selectedLabel)}</span>
               </div>
-              <div className="legend" aria-label={t.canvas.legendAriaLabel}>
-                <span className="legend-item sheet">{t.canvas.sheetLegend}</span>
-                <span className="legend-item robot">{t.canvas.robotLegend}</span>
-                <span className="legend-item stable-solution">
-                  {t.canvas.stableSolutionLegend}
-                </span>
-                <span className="legend-item unstable-solution">
-                  {t.canvas.unstableSolutionLegend}
-                </span>
+              <div className="canvas-heading-actions">
+                <div
+                  className="canvas-tools"
+                  role="group"
+                  aria-label={t.canvas.viewControlsAriaLabel}
+                >
+                  <button
+                    type="button"
+                    aria-label={t.canvas.zoomIn}
+                    title={t.canvas.zoomIn}
+                    onClick={() => zoomAtCenter(ZOOM_IN_FACTOR)}
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t.canvas.zoomOut}
+                    title={t.canvas.zoomOut}
+                    onClick={() => zoomAtCenter(ZOOM_OUT_FACTOR)}
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    className="fit-view-button"
+                    onClick={fitCanvasView}
+                  >
+                    {t.canvas.fitView}
+                  </button>
+                </div>
+                <div className="legend" aria-label={t.canvas.legendAriaLabel}>
+                  <span className="legend-item sheet">{t.canvas.sheetLegend}</span>
+                  <span className="legend-item robot">{t.canvas.robotLegend}</span>
+                  <span className="legend-item stable-solution">
+                    {t.canvas.stableSolutionLegend}
+                  </span>
+                  <span className="legend-item unstable-solution">
+                    {t.canvas.unstableSolutionLegend}
+                  </span>
+                </div>
               </div>
             </div>
             <svg
               ref={svgRef}
-              className="coordinate-canvas"
+              className={`coordinate-canvas ${
+                canvasInteraction?.type === 'pan' ? 'panning' : ''
+              } ${canvasInteraction?.type === 'point' ? 'point-dragging' : ''}`}
               style={canvasStyle}
               viewBox={viewBoxText}
               role="img"
@@ -1118,13 +1299,17 @@ function App() {
                 return (
                   <Fragment key={`object-${index}`}>
                     <g className={`object-marker ${solutionState}`}>
-                      <circle cx={objectPoint.x} cy={objectPoint.y} r={14} />
+                      <circle
+                        cx={objectPoint.x}
+                        cy={objectPoint.y}
+                        r={canvasMetrics.objectRadius}
+                      />
                       <text
                         x={
-                          objectPoint.x + canvasTextMetrics.objectLabelXOffset
+                          objectPoint.x + canvasMetrics.objectLabelXOffset
                         }
                         y={
-                          objectPoint.y + canvasTextMetrics.objectTitleYOffset
+                          objectPoint.y + canvasMetrics.objectTitleYOffset
                         }
                       >
                         po{index + 1}
@@ -1132,10 +1317,10 @@ function App() {
                       <text
                         className="object-status"
                         x={
-                          objectPoint.x + canvasTextMetrics.objectLabelXOffset
+                          objectPoint.x + canvasMetrics.objectLabelXOffset
                         }
                         y={
-                          objectPoint.y + canvasTextMetrics.objectStatusYOffset
+                          objectPoint.y + canvasMetrics.objectStatusYOffset
                         }
                       >
                         {solution.stable
@@ -1147,14 +1332,18 @@ function App() {
                       className={`object-marker virtual ${solutionState}`}
                       key={`virtual-object-${index}`}
                     >
-                      <circle cx={virtualPoint.x} cy={virtualPoint.y} r={12} />
+                      <circle
+                        cx={virtualPoint.x}
+                        cy={virtualPoint.y}
+                        r={canvasMetrics.virtualObjectRadius}
+                      />
                       <text
                         x={
-                          virtualPoint.x + canvasTextMetrics.objectLabelXOffset
+                          virtualPoint.x + canvasMetrics.objectLabelXOffset
                         }
                         y={
                           virtualPoint.y +
-                          canvasTextMetrics.virtualObjectTitleYOffset
+                          canvasMetrics.virtualObjectTitleYOffset
                         }
                       >
                         vo{index + 1}
@@ -1175,19 +1364,23 @@ function App() {
                         className="point-hit-target"
                         cx={svgPoint.x}
                         cy={svgPoint.y}
-                        r={28}
+                        r={canvasMetrics.sheetHitRadius}
                         onPointerDown={handlePointPointerDown('sheet', index)}
                       />
                       <circle
                         className={`point-marker ${active ? 'active' : ''}`}
                         cx={svgPoint.x}
                         cy={svgPoint.y}
-                        r={active ? 13 : 10}
+                        r={
+                          active
+                            ? canvasMetrics.sheetActiveMarkerRadius
+                            : canvasMetrics.sheetMarkerRadius
+                        }
                         onPointerDown={handlePointPointerDown('sheet', index)}
                       />
                       <text
-                        x={svgPoint.x + canvasTextMetrics.pointLabelXOffset}
-                        y={svgPoint.y + canvasTextMetrics.sheetLabelYOffset}
+                        x={svgPoint.x + canvasMetrics.pointLabelXOffset}
+                        y={svgPoint.y + canvasMetrics.sheetLabelYOffset}
                         onPointerDown={handlePointPointerDown('sheet', index)}
                       >
                         v{index + 1}
@@ -1208,19 +1401,23 @@ function App() {
                         className="point-hit-target"
                         cx={svgPoint.x}
                         cy={svgPoint.y}
-                        r={30}
+                        r={canvasMetrics.robotHitRadius}
                         onPointerDown={handlePointPointerDown('robots', index)}
                       />
                       <circle
                         className={`point-marker ${active ? 'active' : ''}`}
                         cx={svgPoint.x}
                         cy={svgPoint.y}
-                        r={active ? 14 : 11}
+                        r={
+                          active
+                            ? canvasMetrics.robotActiveMarkerRadius
+                            : canvasMetrics.robotMarkerRadius
+                        }
                         onPointerDown={handlePointPointerDown('robots', index)}
                       />
                       <text
-                        x={svgPoint.x + canvasTextMetrics.pointLabelXOffset}
-                        y={svgPoint.y + canvasTextMetrics.robotLabelYOffset}
+                        x={svgPoint.x + canvasMetrics.pointLabelXOffset}
+                        y={svgPoint.y + canvasMetrics.robotLabelYOffset}
                         onPointerDown={handlePointPointerDown('robots', index)}
                       >
                         r{index + 1}
