@@ -318,6 +318,8 @@ export function RobotScene3D({
 }: RobotScene3DProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRefs = useRef<SceneRefs | null>(null)
+  const sceneBoundsPointsRef = useRef<THREE.Vector3[]>([])
+  const needsInitialCameraFitRef = useRef(true)
   const [resetSignal, setResetSignal] = useState(0)
   const [webglUnavailable, setWebglUnavailable] = useState(false)
 
@@ -384,6 +386,7 @@ export function RobotScene3D({
       frameId = window.requestAnimationFrame(animate)
     }
     animate()
+    needsInitialCameraFitRef.current = true
 
     return () => {
       window.cancelAnimationFrame(frameId)
@@ -394,6 +397,7 @@ export function RobotScene3D({
       renderer.dispose()
       renderer.domElement.remove()
       sceneRefs.current = null
+      needsInitialCameraFitRef.current = true
     }
   }, [])
 
@@ -424,6 +428,7 @@ export function RobotScene3D({
     visibleSolutions.forEach(({ solution }) => {
       boundsPoints.push(toVector3(solution.po.x, solution.po.y, solution.po.z))
     })
+    sceneBoundsPointsRef.current = boundsPoints
 
     const box = new THREE.Box3().setFromPoints(
       boundsPoints.length ? boundsPoints : [new THREE.Vector3(0, 0, 0)],
@@ -512,14 +517,33 @@ export function RobotScene3D({
       })
     })
 
-    fitCameraToPoints(camera, controls, boundsPoints)
+    if (needsInitialCameraFitRef.current) {
+      fitCameraToPoints(camera, controls, boundsPoints)
+      needsInitialCameraFitRef.current = false
+    }
   }, [
     holdHeight,
     indexBase,
-    resetSignal,
     robots,
     visibleSolutions,
   ])
+
+  useEffect(() => {
+    if (resetSignal === 0) {
+      return
+    }
+
+    const refs = sceneRefs.current
+    if (!refs) {
+      return
+    }
+
+    fitCameraToPoints(
+      refs.camera,
+      refs.controls,
+      sceneBoundsPointsRef.current,
+    )
+  }, [resetSignal])
 
   return (
     <section className="scene-panel">
