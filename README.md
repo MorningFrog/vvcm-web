@@ -12,7 +12,7 @@ VVCM Web is a React, TypeScript, and Vite visual test bench for the `@morningfro
 * Pan and zoom the coordinate canvas manually, with a fit-view control to reframe the current geometry.
 * Inspect robot ground points `r#`, elevated `p# hold point` markers, FK object points `po`, and taut `p#-po` links in a Z-up Three.js 3D view.
 * Import, edit, sync, and copy point arrays as JSON.
-* Copy the full solver configuration, including `robotCount`, `holdHeight`, `sheet`, and `formation`.
+* Copy and paste the full solver configuration, including `robotCount`, `holdHeight`, `sheet`, and `formation`.
 * Run `VvcmFk` in the browser and display candidate solution counts, stability labels, object poses, virtual object points, and taut cable indices.
 * Visualize the sheet polygon, robot formation, cable reference lines, single-solution taut `vi-vo` and `ri-ro` segments, and selected or all FK solution positions with matching solution colors in the canvas and FK result list.
 * Switch displayed indices between 0-based and 1-based labels for points, FK solutions, object markers, and taut cable lists.
@@ -89,7 +89,7 @@ npm run lint
 
 ## Usage
 
-Use the parameter panel to set the robot count and hold height. The robot count is clamped to the supported UI range and keeps the sheet vertex count and robot position count aligned.
+Use the parameter panel to set the robot count and hold height. The robot count is clamped to the supported UI range and keeps the sheet vertex count and robot position count aligned. Use the full configuration actions in the left sidebar to copy or paste the complete solver configuration.
 
 On desktop, the workspace uses three independently scrolling columns: sheet vertex and robot position inputs, including JSON editors, on the left; the coordinate canvas and 3D view in the center; FK results and FK result JSON on the right.
 
@@ -125,7 +125,7 @@ Point arrays can be represented as tuples:
 ]
 ```
 
-The full copied configuration uses this shape:
+The full copied and pasted configuration uses this shape:
 
 ```json
 {

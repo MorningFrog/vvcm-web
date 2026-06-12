@@ -391,6 +391,17 @@ button:hover {
   background: #f5f8f7;
 }
 
+.full-config-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.full-config-actions button {
+  min-width: 0;
+  width: 100%;
+}
+
 .mode-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -929,6 +940,7 @@ code {
   .selected-point,
   .solution-controls,
   .solution-row,
+  .full-config-actions,
   .editor-actions {
     grid-template-columns: 1fr;
   }

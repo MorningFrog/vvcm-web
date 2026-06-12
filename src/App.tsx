@@ -22,6 +22,7 @@ import {
   translations,
   type Locale,
   type Messages,
+  type FullConfigErrorCode,
   type ParseErrorCode,
 } from './i18n'
 import { RobotScene3D, type RobotSceneSolutionEntry } from './RobotScene3D'
@@ -36,6 +37,13 @@ type PointKind = 'sheet' | 'robots'
 type SolutionDisplayMode = 'single' | 'all'
 
 type IndexBase = 0 | 1
+
+type FullConfig = {
+  robotCount: number
+  holdHeight: number
+  sheet: Point[]
+  robots: Point[]
+}
 
 type PointDragState = {
   type: 'point'
@@ -130,6 +138,14 @@ type StatusMessage =
       message: string
     }
   | {
+      type: 'fullConfigPasted'
+      count: number
+    }
+  | {
+      type: 'pasteFailed'
+      message: string
+    }
+  | {
       type: 'parseError'
       code: ParseErrorCode
     }
@@ -157,6 +173,16 @@ class PointParseError extends Error {
   constructor(code: ParseErrorCode) {
     super(code)
     this.name = 'PointParseError'
+    this.code = code
+  }
+}
+
+class FullConfigParseError extends Error {
+  code: FullConfigErrorCode
+
+  constructor(code: FullConfigErrorCode) {
+    super(code)
+    this.name = 'FullConfigParseError'
     this.code = code
   }
 }
@@ -403,6 +429,82 @@ const pointFromUnknown = (value: unknown): Point | null => {
   return null
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+
+const parseFullConfigPoints = (value: unknown): Point[] => {
+  if (!Array.isArray(value)) {
+    throw new FullConfigParseError('pointArrayRequired')
+  }
+
+  const points = value.map(pointFromUnknown)
+  if (points.some((point) => point === null)) {
+    throw new FullConfigParseError('invalidPointItem')
+  }
+
+  return points as Point[]
+}
+
+const parseFullConfigText = (text: string): FullConfig => {
+  const trimmed = text.trim()
+  if (!trimmed) {
+    throw new FullConfigParseError('emptyInput')
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch {
+    throw new FullConfigParseError('invalidJson')
+  }
+
+  if (!isRecord(parsed)) {
+    throw new FullConfigParseError('jsonRootObject')
+  }
+
+  if (
+    !('robotCount' in parsed) ||
+    !('holdHeight' in parsed) ||
+    !('sheet' in parsed) ||
+    !('formation' in parsed)
+  ) {
+    throw new FullConfigParseError('missingField')
+  }
+
+  const robotCount = parsed.robotCount
+  if (
+    typeof robotCount !== 'number' ||
+    !Number.isInteger(robotCount) ||
+    robotCount < MIN_ROBOT_COUNT ||
+    robotCount > MAX_ROBOT_COUNT
+  ) {
+    throw new FullConfigParseError('invalidRobotCount')
+  }
+
+  const holdHeight = parsed.holdHeight
+  if (
+    typeof holdHeight !== 'number' ||
+    !Number.isFinite(holdHeight) ||
+    holdHeight < 0
+  ) {
+    throw new FullConfigParseError('invalidHoldHeight')
+  }
+
+  const sheet = parseFullConfigPoints(parsed.sheet)
+  const robots = parseFullConfigPoints(parsed.formation)
+
+  if (sheet.length !== robotCount || robots.length !== robotCount) {
+    throw new FullConfigParseError('mismatchedCounts')
+  }
+
+  return {
+    robotCount,
+    holdHeight: round(holdHeight),
+    sheet,
+    robots,
+  }
+}
+
 const parsePointText = (text: string): Point[] => {
   const trimmed = text.trim()
   if (!trimmed) {
@@ -560,6 +662,10 @@ const formatStatusMessage = (status: StatusMessage, t: Messages) => {
       return t.status.copied(status.label)
     case 'copyFailed':
       return t.status.copyFailed(status.message)
+    case 'fullConfigPasted':
+      return t.status.fullConfigPasted(status.count)
+    case 'pasteFailed':
+      return t.status.pasteFailed(status.message)
     case 'parseError':
       return t.parseErrors[status.code]
     case 'pointCountRange':
@@ -1062,6 +1168,34 @@ function App() {
       allConfigToJson(robotCount, holdHeight, sheet, robots),
     )
 
+  const pasteAllConfig = async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      const config = parseFullConfigText(text)
+      const nextSheetText = pointsToJson(config.sheet)
+      const nextRobotsText = pointsToJson(config.robots)
+
+      setRobotCount(config.robotCount)
+      setHoldHeight(config.holdHeight)
+      setSheet(config.sheet)
+      setRobots(config.robots)
+      setSelectedIndex((current) => Math.min(current, config.robotCount - 1))
+      setSheetText(nextSheetText)
+      setRobotsText(nextRobotsText)
+      setSheetTextDirty(false)
+      setRobotsTextDirty(false)
+      setStatus({ type: 'fullConfigPasted', count: config.robotCount })
+    } catch (error) {
+      setStatus({
+        type: 'pasteFailed',
+        message:
+          error instanceof FullConfigParseError
+            ? t.fullConfigErrors[error.code]
+            : getErrorMessage(error),
+      })
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -1107,9 +1241,6 @@ function App() {
               ))}
             </select>
           </label>
-          <button type="button" className="secondary-button" onClick={copyAllConfig}>
-            {t.header.copyAllConfig}
-          </button>
           <div className="version-pill">vvcm-rs {version()}</div>
         </div>
       </header>
@@ -1201,6 +1332,33 @@ function App() {
             </div>
           </section>
 
+          <section className="panel full-config-panel">
+            <div className="panel-heading">
+              <h2>{t.fullConfig.title}</h2>
+            </div>
+            <div
+              className="full-config-actions"
+              role="group"
+              aria-label={t.fullConfig.ariaLabel}
+            >
+              <button type="button" className="secondary-button" onClick={copyAllConfig}>
+                {t.fullConfig.copyAllConfig}
+              </button>
+              <button type="button" className="primary-button" onClick={pasteAllConfig}>
+                {t.fullConfig.pasteAllConfig}
+              </button>
+            </div>
+          </section>
+
+          <section className="panel status-panel">
+            <div className="panel-heading">
+              <h2>{t.data.statusTitle}</h2>
+            </div>
+            <p role="status" aria-live="polite">
+              {statusText}
+            </p>
+          </section>
+
           <PointTable
             pointHeader={t.controls.tablePointHeader}
             title={t.controls.sheetTableTitle}
@@ -1268,13 +1426,6 @@ function App() {
             onSync={() => syncPointText('robots')}
             onCopy={() => copyText(t.labels.robots, pointsToJson(robots))}
           />
-
-          <section className="panel status-panel">
-            <div className="panel-heading">
-              <h2>{t.data.statusTitle}</h2>
-            </div>
-            <p>{statusText}</p>
-          </section>
         </aside>
 
         <section className="visual-column">

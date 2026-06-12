@@ -6,7 +6,6 @@ export const translations = {
       selectorLabel: '语言',
     },
     header: {
-      copyAllConfig: '复制全部配置',
       eyebrow: 'VVCM wasm visual test bench',
       indexBaseAriaLabel: '显示索引基准',
       indexBaseLabel: '索引',
@@ -26,6 +25,12 @@ export const translations = {
       sheetTableTitle: '柔性布顶点',
       tablePointHeader: '点',
       title: '参数',
+    },
+    fullConfig: {
+      ariaLabel: '完整配置操作',
+      copyAllConfig: '复制全部配置',
+      pasteAllConfig: '粘贴全部配置',
+      title: '完整配置',
     },
     canvas: {
       ariaLabel: 'VVCM 坐标画布',
@@ -89,6 +94,17 @@ export const translations = {
       jsonRootArray: 'JSON 根节点需要是数组',
       noCoordinateRows: '没有识别到坐标行',
     },
+    fullConfigErrors: {
+      emptyInput: '剪贴板内容为空',
+      invalidHoldHeight: 'holdHeight 需要是非负数',
+      invalidJson: '剪贴板内容不是有效的 JSON',
+      invalidPointItem: 'sheet 和 formation 的点需要是 [x, y] 或 { x, y }',
+      invalidRobotCount: 'robotCount 需要是支持范围内的整数',
+      jsonRootObject: '完整配置 JSON 根节点需要是对象',
+      mismatchedCounts: 'robotCount、sheet 数量和 formation 数量需要一致',
+      missingField: '完整配置需要包含 robotCount、holdHeight、sheet 和 formation',
+      pointArrayRequired: 'sheet 和 formation 需要是点数组',
+    },
     errors: {
       mismatchedCounts: '布顶点数量和机器人数量需要一致',
     },
@@ -96,6 +112,8 @@ export const translations = {
       copied: (label: string) => `${label} 已复制`,
       copyFailed: (message: string) => `复制失败：${message}`,
       countSet: (count: number) => `数量已设置为 ${count}`,
+      fullConfigPasted: (count: number) => `完整配置已粘贴，数量 ${count}`,
+      pasteFailed: (message: string) => `粘贴失败：${message}`,
       pointCountRange: (min: number, max: number) =>
         `点数量需要在 ${min} 到 ${max} 之间`,
       pointsApplied: (label: string, count: number) =>
@@ -112,7 +130,6 @@ export const translations = {
       selectorLabel: 'Language',
     },
     header: {
-      copyAllConfig: 'Copy full config',
       eyebrow: 'VVCM wasm visual test bench',
       indexBaseAriaLabel: 'Displayed index base',
       indexBaseLabel: 'Index',
@@ -132,6 +149,12 @@ export const translations = {
       sheetTableTitle: 'Deformable sheet vertices',
       tablePointHeader: 'Point',
       title: 'Parameters',
+    },
+    fullConfig: {
+      ariaLabel: 'Full config actions',
+      copyAllConfig: 'Copy full config',
+      pasteAllConfig: 'Paste full config',
+      title: 'Full config',
     },
     canvas: {
       ariaLabel: 'VVCM coordinate canvas',
@@ -195,6 +218,17 @@ export const translations = {
       jsonRootArray: 'JSON root must be an array',
       noCoordinateRows: 'No coordinate rows recognized',
     },
+    fullConfigErrors: {
+      emptyInput: 'Clipboard content is empty',
+      invalidHoldHeight: 'holdHeight must be a non-negative number',
+      invalidJson: 'Clipboard content is not valid JSON',
+      invalidPointItem: 'sheet and formation points must be [x, y] or { x, y }',
+      invalidRobotCount: 'robotCount must be an integer in the supported range',
+      jsonRootObject: 'Full config JSON root must be an object',
+      mismatchedCounts: 'robotCount, sheet count, and formation count must match',
+      missingField: 'Full config must include robotCount, holdHeight, sheet, and formation',
+      pointArrayRequired: 'sheet and formation must be point arrays',
+    },
     errors: {
       mismatchedCounts: 'Sheet vertex count and robot count must match',
     },
@@ -202,6 +236,8 @@ export const translations = {
       copied: (label: string) => `${label} copied`,
       copyFailed: (message: string) => `Copy failed: ${message}`,
       countSet: (count: number) => `Count set to ${count}`,
+      fullConfigPasted: (count: number) => `Full config pasted, count ${count}`,
+      pasteFailed: (message: string) => `Paste failed: ${message}`,
       pointCountRange: (min: number, max: number) =>
         `Point count must be between ${min} and ${max}`,
       pointsApplied: (label: string, count: number) =>
@@ -215,6 +251,7 @@ export const translations = {
 
 export type Locale = keyof typeof translations
 export type Messages = (typeof translations)[Locale]
+export type FullConfigErrorCode = keyof typeof translations['zh-CN']['fullConfigErrors']
 export type LabelKey = keyof typeof translations['zh-CN']['labels']
 export type ParseErrorCode = keyof typeof translations['zh-CN']['parseErrors']
 
