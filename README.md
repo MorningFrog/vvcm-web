@@ -1,73 +1,128 @@
-# React + TypeScript + Vite
+# VVCM Web
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+VVCM Web is a React, TypeScript, and Vite visual test bench for the `@morningfrog/vvcm-rs` WebAssembly package. It helps inspect VVCM forward-kinematics inputs and outputs for multi-robot transporting system with a deformable sheet.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+* Configure the robot count, which also controls the deformable sheet vertex count.
+* Configure the robot hold height used by the VVCM solver.
+* Edit deformable sheet vertices and robot positions in coordinate tables.
+* Drag sheet vertices and robot positions directly on an SVG coordinate canvas.
+* Import, edit, sync, and copy point arrays as JSON.
+* Copy the full solver configuration, including `robotCount`, `holdHeight`, `sheet`, and `formation`.
+* Run `VvcmFk` in the browser and display stable solution counts, object pose, and taut cable indices.
+* Visualize the sheet polygon, robot formation, cable lines, taut cables, and selected object position.
 
-## React Compiler
+## Requirements
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+* Node.js compatible with the versions required by Vite and TypeScript in `package.json`.
+* npm.
 
-## Expanding the ESLint configuration
+## Install
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Run
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+```bash
+npm run dev
+```
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Vite prints the local development URL after startup. If the default port is already occupied, pass a port explicitly:
+
+```bash
+npm run dev -- --host 127.0.0.1 --port 5174
+```
+
+## Build
+
+```bash
+npm run build
+```
+
+The production output is written to `dist/`.
+
+## Lint
+
+```bash
+npm run lint
+```
+
+## Usage
+
+Use the parameter panel to set the robot count and hold height. The robot count is clamped to the supported UI range and keeps the sheet vertex count and robot position count aligned.
+
+Use the edit mode control to choose whether canvas clicks edit sheet vertices or robot positions. Drag a point marker or its label to move that point. Clicking the canvas moves the currently selected point to the clicked coordinate.
+
+The point tables provide precise numeric editing. The JSON editors accept arrays of `[x, y]` tuples or `{ "x": number, "y": number }` objects. Applying a JSON editor also updates the shared robot count to match the number of parsed points.
+
+The FK result panel calls:
+
+```ts
+const fk = new VvcmFk(robotCount, holdHeight, sheet)
+const solutions = fk.updateStableSolutions(formation)
+```
+
+The first stable solution, when one exists, is drawn on the canvas as the object marker. Taut cables from that solution are highlighted.
+
+## Data Format
+
+Point arrays can be represented as tuples:
+
+```json
+[
+  [213.7, 122.7],
+  [804.6, 37.2],
+  [904.0, 550.0],
+  [439.3, 715.9]
+]
+```
+
+The full copied configuration uses this shape:
+
+```json
+{
+  "robotCount": 4,
+  "holdHeight": 1000,
+  "sheet": [
+    [-316.1, -421.9],
+    [803.4, -384.1],
+    [746.1, 712.8],
+    [-367.3, 664.2]
+  ],
+  "formation": [
+    [213.7, 122.7],
+    [804.6, 37.2],
+    [904.0, 550.0],
+    [439.3, 715.9]
+  ]
+}
+```
+
+## WebAssembly Notes
+
+The app consumes `@morningfrog/vvcm-rs`, which ships wasm-bindgen generated ESM that imports `vvcm_rs_bg.wasm` directly. Vite 8 does not handle that ESM wasm import form by default, so `vite.config.ts` includes a small compatibility plugin that instantiates the package wasm and re-exports its bindings.
+
+The Vite dependency optimizer excludes `@morningfrog/vvcm-rs` so the same wasm compatibility path works in development and production builds.
+
+## Scripts
+
+| Script | Description |
+| ------ | ----------- |
+| `npm run dev` | Start the Vite development server. |
+| `npm run build` | Type-check the project and build production assets. |
+| `npm run lint` | Run ESLint. |
+| `npm run preview` | Preview the production build locally. |
+
+## Project Structure
+
+```text
+src/
+  App.tsx       Main VVCM visual test bench UI and solver integration.
+  App.css       Test bench layout, canvas, and control styling.
+  index.css     Global styles.
+  main.tsx      React entry point.
+vite.config.ts  Vite config, React plugin, and vvcm-rs wasm compatibility.
 ```
