@@ -3,6 +3,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent,
 } from 'react'
 import {
@@ -67,6 +68,18 @@ type GridLines = {
   horizontal: number[]
 }
 
+type CanvasTextMetrics = {
+  labelSize: number
+  statusSize: number
+  labelStroke: number
+  pointLabelXOffset: number
+  sheetLabelYOffset: number
+  robotLabelYOffset: number
+  objectLabelXOffset: number
+  objectTitleYOffset: number
+  objectStatusYOffset: number
+}
+
 type StatusMessage =
   | {
       type: 'ready'
@@ -126,6 +139,49 @@ const round = (value: number, digits = 2) => {
   const factor = 10 ** digits
   return Math.round(value * factor) / factor
 }
+
+const DEFAULT_CANVAS_UNITS_PER_PIXEL = 3
+const CANVAS_TEXT_TARGETS = {
+  labelSize: 16,
+  statusSize: 13,
+  labelStroke: 3,
+  pointLabelXOffset: 12,
+  sheetLabelYOffset: -10,
+  robotLabelYOffset: 21,
+  objectLabelXOffset: 16,
+  objectTitleYOffset: -14,
+  objectStatusYOffset: 4,
+} satisfies CanvasTextMetrics
+
+const scaleCanvasTextMetrics = (
+  unitsPerPixel: number,
+): CanvasTextMetrics => {
+  const scale = (value: number) => round(value * unitsPerPixel, 2)
+
+  return {
+    labelSize: scale(CANVAS_TEXT_TARGETS.labelSize),
+    statusSize: scale(CANVAS_TEXT_TARGETS.statusSize),
+    labelStroke: scale(CANVAS_TEXT_TARGETS.labelStroke),
+    pointLabelXOffset: scale(CANVAS_TEXT_TARGETS.pointLabelXOffset),
+    sheetLabelYOffset: scale(CANVAS_TEXT_TARGETS.sheetLabelYOffset),
+    robotLabelYOffset: scale(CANVAS_TEXT_TARGETS.robotLabelYOffset),
+    objectLabelXOffset: scale(CANVAS_TEXT_TARGETS.objectLabelXOffset),
+    objectTitleYOffset: scale(CANVAS_TEXT_TARGETS.objectTitleYOffset),
+    objectStatusYOffset: scale(CANVAS_TEXT_TARGETS.objectStatusYOffset),
+  }
+}
+
+const DEFAULT_CANVAS_TEXT_METRICS = scaleCanvasTextMetrics(
+  DEFAULT_CANVAS_UNITS_PER_PIXEL,
+)
+
+const sameCanvasTextMetrics = (
+  current: CanvasTextMetrics,
+  next: CanvasTextMetrics,
+) =>
+  (Object.keys(next) as Array<keyof CanvasTextMetrics>).every(
+    (key) => current[key] === next[key],
+  )
 
 const formatNumber = (value: number) => {
   if (!Number.isFinite(value)) {
@@ -391,6 +447,8 @@ function App() {
     useState<number | null>(null)
   const [dragging, setDragging] = useState<DragState | null>(null)
   const [status, setStatus] = useState<StatusMessage>({ type: 'ready' })
+  const [canvasTextMetrics, setCanvasTextMetrics] =
+    useState<CanvasTextMetrics>(DEFAULT_CANVAS_TEXT_METRICS)
   const [sheetText, setSheetText] = useState(() =>
     pointsToJson(makeInitialSheet(DEFAULT_ROBOT_COUNT)),
   )
@@ -496,14 +554,59 @@ function App() {
   const viewBox = useMemo(() => buildViewBox(canvasPoints), [canvasPoints])
   const grid = useMemo(() => makeGrid(viewBox), [viewBox])
   const viewBoxText = `${viewBox.minX} ${viewBox.minY} ${viewBox.width} ${viewBox.height}`
+  const canvasStyle = useMemo(
+    () =>
+      ({
+        '--canvas-label-size': `${canvasTextMetrics.labelSize}px`,
+        '--canvas-status-size': `${canvasTextMetrics.statusSize}px`,
+        '--canvas-label-stroke': `${canvasTextMetrics.labelStroke}px`,
+      }) as CSSProperties,
+    [canvasTextMetrics],
+  )
   const selectedPoints = selectedKind === 'sheet' ? sheet : robots
   const selectedPoint = selectedPoints[selectedIndex] ?? selectedPoints[0]
-  const selectedLabel = `${selectedKind === 'sheet' ? 'S' : 'R'}${selectedIndex + 1}`
+  const selectedLabel = `${selectedKind === 'sheet' ? 'v' : 'r'}${selectedIndex + 1}`
   const tautCables = new Set(
     displayedSolutionEntries.flatMap(
       ({ solution }) => solution.tautCables,
     ),
   )
+
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg) {
+      return
+    }
+
+    const updateCanvasTextMetrics = () => {
+      const { height, width } = svg.getBoundingClientRect()
+      if (!height || !width) {
+        return
+      }
+
+      const unitsPerPixel = Math.max(
+        viewBox.width / width,
+        viewBox.height / height,
+      )
+      const nextMetrics = scaleCanvasTextMetrics(unitsPerPixel)
+
+      setCanvasTextMetrics((current) =>
+        sameCanvasTextMetrics(current, nextMetrics) ? current : nextMetrics,
+      )
+    }
+
+    updateCanvasTextMetrics()
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateCanvasTextMetrics)
+      return () => window.removeEventListener('resize', updateCanvasTextMetrics)
+    }
+
+    const resizeObserver = new ResizeObserver(updateCanvasTextMetrics)
+    resizeObserver.observe(svg)
+
+    return () => resizeObserver.disconnect()
+  }, [viewBox])
 
   const updatePoint = (kind: PointKind, index: number, point: Point) => {
     const safePoint = { x: round(point.x), y: round(point.y) }
@@ -882,6 +985,7 @@ function App() {
             <svg
               ref={svgRef}
               className="coordinate-canvas"
+              style={canvasStyle}
               viewBox={viewBoxText}
               role="img"
               aria-label={t.canvas.ariaLabel}
@@ -975,15 +1079,23 @@ function App() {
                   >
                     <circle cx={objectPoint.x} cy={objectPoint.y} r={14} />
                     <text
-                      x={objectPoint.x + 20}
-                      y={objectPoint.y - 18}
+                      x={
+                        objectPoint.x + canvasTextMetrics.objectLabelXOffset
+                      }
+                      y={
+                        objectPoint.y + canvasTextMetrics.objectTitleYOffset
+                      }
                     >
-                      O{index + 1}
+                      po{index + 1}
                     </text>
                     <text
                       className="object-status"
-                      x={objectPoint.x + 20}
-                      y={objectPoint.y + 4}
+                      x={
+                        objectPoint.x + canvasTextMetrics.objectLabelXOffset
+                      }
+                      y={
+                        objectPoint.y + canvasTextMetrics.objectStatusYOffset
+                      }
                     >
                       {solution.stable
                         ? t.results.stableBadge
@@ -1015,11 +1127,11 @@ function App() {
                         onPointerDown={handlePointPointerDown('sheet', index)}
                       />
                       <text
-                        x={svgPoint.x + 14}
-                        y={svgPoint.y - 14}
+                        x={svgPoint.x + canvasTextMetrics.pointLabelXOffset}
+                        y={svgPoint.y + canvasTextMetrics.sheetLabelYOffset}
                         onPointerDown={handlePointPointerDown('sheet', index)}
                       >
-                        S{index + 1}
+                        v{index + 1}
                       </text>
                     </g>
                   )
@@ -1048,11 +1160,11 @@ function App() {
                         onPointerDown={handlePointPointerDown('robots', index)}
                       />
                       <text
-                        x={svgPoint.x + 15}
-                        y={svgPoint.y + 25}
+                        x={svgPoint.x + canvasTextMetrics.pointLabelXOffset}
+                        y={svgPoint.y + canvasTextMetrics.robotLabelYOffset}
                         onPointerDown={handlePointPointerDown('robots', index)}
                       >
-                        R{index + 1}
+                        r{index + 1}
                       </text>
                     </g>
                   )

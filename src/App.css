@@ -315,6 +315,9 @@ button:hover {
 }
 
 .coordinate-canvas {
+  --canvas-label-size: 48px;
+  --canvas-status-size: 39px;
+  --canvas-label-stroke: 9px;
   width: 100%;
   aspect-ratio: 16 / 10;
   display: block;
@@ -402,9 +405,9 @@ button:hover {
   fill: #1a2528;
   paint-order: stroke;
   stroke: #ffffff;
-  stroke-width: 5;
+  stroke-width: var(--canvas-label-stroke);
   stroke-linejoin: round;
-  font-size: 20px;
+  font-size: var(--canvas-label-size);
   font-weight: 800;
   cursor: grab;
   pointer-events: auto;
@@ -432,7 +435,7 @@ button:hover {
 }
 
 .object-marker .object-status {
-  font-size: 14px;
+  font-size: var(--canvas-status-size);
   font-weight: 760;
 }
 
