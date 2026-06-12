@@ -166,6 +166,7 @@ const DEFAULT_HOLD_HEIGHT = 1000
 const DEFAULT_INDEX_BASE: IndexBase = 1
 const INDEX_BASE_STORAGE_KEY = 'vvcm-web.index-base.v1'
 const EMPTY_SOLUTIONS: FkSolutionOutput[] = []
+const GITHUB_ICON_HREF = `${import.meta.env.BASE_URL}icons.svg#github-icon`
 
 class PointParseError extends Error {
   code: ParseErrorCode
@@ -1255,7 +1256,7 @@ function App() {
               title={t.header.vvcmSourceAriaLabel}
             >
               <svg aria-hidden="true" focusable="false">
-                <use href="/icons.svg#github-icon" />
+                <use href={GITHUB_ICON_HREF} />
               </svg>
               <span>VVCM</span>
             </a>
@@ -1268,7 +1269,7 @@ function App() {
               title={t.header.webSourceAriaLabel}
             >
               <svg aria-hidden="true" focusable="false">
-                <use href="/icons.svg#github-icon" />
+                <use href={GITHUB_ICON_HREF} />
               </svg>
               <span>Web</span>
             </a>
