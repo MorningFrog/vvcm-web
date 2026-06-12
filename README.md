@@ -10,8 +10,8 @@ VVCM Web is a React, TypeScript, and Vite visual test bench for the `@morningfro
 * Drag sheet vertices and robot positions directly on an SVG coordinate canvas.
 * Import, edit, sync, and copy point arrays as JSON.
 * Copy the full solver configuration, including `robotCount`, `holdHeight`, `sheet`, and `formation`.
-* Run `VvcmFk` in the browser and display stable solution counts, object pose, and taut cable indices.
-* Visualize the sheet polygon, robot formation, cable lines, taut cables, and selected object position.
+* Run `VvcmFk` in the browser and display candidate solution counts, stability labels, object poses, and taut cable indices.
+* Visualize the sheet polygon, robot formation, cable lines, taut cables, and selected or all FK solution positions.
 * Switch the interface language between Simplified Chinese and English.
 
 ## Requirements
@@ -68,7 +68,7 @@ const fk = new VvcmFk(robotCount, holdHeight, sheet)
 const solutions = fk.updateStableSolutions(formation)
 ```
 
-The first stable solution, when one exists, is drawn on the canvas as the object marker. Taut cables from that solution are highlighted.
+The FK result panel lists every candidate branch from `solutions.solutions`, marks each branch as stable or unstable, and lets you show one branch or all branches on the canvas. In single-branch mode, taut cables from the selected branch are highlighted. In all-branches mode, object markers for every branch are drawn and cables taut in any visible branch are highlighted.
 
 ## Data Format
 

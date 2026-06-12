@@ -31,6 +31,8 @@ type Point = {
 
 type PointKind = 'sheet' | 'robots'
 
+type SolutionDisplayMode = 'single' | 'all'
+
 type DragState = {
   kind: PointKind
   index: number
@@ -42,12 +44,16 @@ type SolveState =
   | {
       status: 'ok'
       result: FkSolutionsOutput
-      solution: FkSolutionOutput | null
     }
   | {
       status: 'error'
       message: string
     }
+
+type IndexedSolution = {
+  index: number
+  solution: FkSolutionOutput
+}
 
 type ViewBox = {
   minX: number
@@ -104,6 +110,7 @@ const MIN_ROBOT_COUNT = 3
 const MAX_ROBOT_COUNT = 16
 const DEFAULT_ROBOT_COUNT = 4
 const DEFAULT_HOLD_HEIGHT = 1000
+const EMPTY_SOLUTIONS: FkSolutionOutput[] = []
 
 class PointParseError extends Error {
   code: ParseErrorCode
@@ -336,6 +343,11 @@ const getErrorMessage = (error: unknown) => {
   return String(error)
 }
 
+const isNoStableSolutionError = (error: unknown) =>
+  error instanceof Error &&
+  'code' in error &&
+  error.code === 'NO_STABLE_SOLUTION'
+
 const formatStatusMessage = (status: StatusMessage, t: Messages) => {
   switch (status.type) {
     case 'ready':
@@ -373,6 +385,10 @@ function App() {
   )
   const [selectedKind, setSelectedKind] = useState<PointKind>('sheet')
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [solutionDisplayMode, setSolutionDisplayMode] =
+    useState<SolutionDisplayMode>('single')
+  const [selectedSolutionIndex, setSelectedSolutionIndex] =
+    useState<number | null>(null)
   const [dragging, setDragging] = useState<DragState | null>(null)
   const [status, setStatus] = useState<StatusMessage>({ type: 'ready' })
   const [sheetText, setSheetText] = useState(() =>
@@ -409,10 +425,17 @@ function App() {
 
       try {
         const result = fk.updateStableSolutions(toPointInput(robots))
-        const solution =
-          result.solutions.find((item) => item.stable) ?? null
 
-        return { status: 'ok', result, solution }
+        return { status: 'ok', result }
+      } catch (error) {
+        if (isNoStableSolutionError(error)) {
+          const result = fk.solutions()
+          if (result.solutions.length) {
+            return { status: 'ok', result }
+          }
+        }
+
+        throw error
       } finally {
         fk.free()
       }
@@ -424,17 +447,51 @@ function App() {
     }
   }, [holdHeight, robotCount, robots, sheet, t])
 
-  const activeSolution =
-    solveState.status === 'ok' ? solveState.solution : null
+  const allSolutions =
+    solveState.status === 'ok' ? solveState.result.solutions : EMPTY_SOLUTIONS
+  const firstStableSolutionIndex = allSolutions.findIndex(
+    (solution) => solution.stable,
+  )
+  const fallbackSolutionIndex = allSolutions.length
+    ? firstStableSolutionIndex >= 0
+      ? firstStableSolutionIndex
+      : 0
+    : null
+  const activeSolutionIndex =
+    selectedSolutionIndex !== null && allSolutions[selectedSolutionIndex]
+      ? selectedSolutionIndex
+      : fallbackSolutionIndex
+  const indexedSolutions = useMemo<IndexedSolution[]>(
+    () =>
+      allSolutions.map((solution, index) => ({
+        index,
+        solution,
+      })),
+    [allSolutions],
+  )
+  const selectedSolutionEntry =
+    activeSolutionIndex !== null
+      ? indexedSolutions[activeSolutionIndex] ?? null
+      : null
+  const displayedSolutionEntries = useMemo<IndexedSolution[]>(() => {
+    if (solutionDisplayMode === 'all') {
+      return indexedSolutions
+    }
+
+    return selectedSolutionEntry ? [selectedSolutionEntry] : []
+  }, [indexedSolutions, selectedSolutionEntry, solutionDisplayMode])
 
   const canvasPoints = useMemo(() => {
     const points = [...sheet, ...robots]
-    if (activeSolution) {
-      points.push({ x: activeSolution.po.x, y: activeSolution.po.y })
-    }
+    points.push(
+      ...displayedSolutionEntries.map(({ solution }) => ({
+        x: solution.po.x,
+        y: solution.po.y,
+      })),
+    )
 
     return points
-  }, [activeSolution, robots, sheet])
+  }, [displayedSolutionEntries, robots, sheet])
 
   const viewBox = useMemo(() => buildViewBox(canvasPoints), [canvasPoints])
   const grid = useMemo(() => makeGrid(viewBox), [viewBox])
@@ -442,11 +499,11 @@ function App() {
   const selectedPoints = selectedKind === 'sheet' ? sheet : robots
   const selectedPoint = selectedPoints[selectedIndex] ?? selectedPoints[0]
   const selectedLabel = `${selectedKind === 'sheet' ? 'S' : 'R'}${selectedIndex + 1}`
-  const tautCables = new Set(activeSolution?.tautCables ?? [])
-  const stableSolutions =
-    solveState.status === 'ok'
-      ? solveState.result.solutions.filter((solution) => solution.stable)
-      : []
+  const tautCables = new Set(
+    displayedSolutionEntries.flatMap(
+      ({ solution }) => solution.tautCables,
+    ),
+  )
 
   const updatePoint = (kind: PointKind, index: number, point: Point) => {
     const safePoint = { x: round(point.x), y: round(point.y) }
@@ -814,7 +871,12 @@ function App() {
               <div className="legend" aria-label={t.canvas.legendAriaLabel}>
                 <span className="legend-item sheet">{t.canvas.sheetLegend}</span>
                 <span className="legend-item robot">{t.canvas.robotLegend}</span>
-                <span className="legend-item object">{t.canvas.objectLegend}</span>
+                <span className="legend-item stable-solution">
+                  {t.canvas.stableSolutionLegend}
+                </span>
+                <span className="legend-item unstable-solution">
+                  {t.canvas.unstableSolutionLegend}
+                </span>
               </div>
             </div>
             <svg
@@ -902,21 +964,34 @@ function App() {
                   )
                 })}
               </g>
-              {activeSolution && (
-                <g className="object-marker">
-                  <circle
-                    cx={toSvgPoint(activeSolution.po).x}
-                    cy={toSvgPoint(activeSolution.po).y}
-                    r={14}
-                  />
-                  <text
-                    x={toSvgPoint(activeSolution.po).x + 20}
-                    y={toSvgPoint(activeSolution.po).y - 18}
+              {displayedSolutionEntries.map(({ index, solution }) => {
+                const objectPoint = toSvgPoint(solution.po)
+                const solutionState = solution.stable ? 'stable' : 'unstable'
+
+                return (
+                  <g
+                    className={`object-marker ${solutionState}`}
+                    key={`object-${index}`}
                   >
-                    O
-                  </text>
-                </g>
-              )}
+                    <circle cx={objectPoint.x} cy={objectPoint.y} r={14} />
+                    <text
+                      x={objectPoint.x + 20}
+                      y={objectPoint.y - 18}
+                    >
+                      O{index + 1}
+                    </text>
+                    <text
+                      className="object-status"
+                      x={objectPoint.x + 20}
+                      y={objectPoint.y + 4}
+                    >
+                      {solution.stable
+                        ? t.results.stableBadge
+                        : t.results.unstableBadge}
+                    </text>
+                  </g>
+                )
+              })}
               <g className="sheet-points">
                 {sheet.map((point, index) => {
                   const svgPoint = toSvgPoint(point)
@@ -996,25 +1071,104 @@ function App() {
               </span>
             </div>
             {solveState.status === 'ok' ? (
-              <div className="solution-list">
-                {stableSolutions.length ? (
-                  stableSolutions.slice(0, 4).map((solution, index) => (
-                    <div className="solution-row" key={`solution-${index}`}>
-                      <span>#{index + 1}</span>
-                      <code>
-                        po=({formatNumber(solution.po.x)},{' '}
-                        {formatNumber(solution.po.y)},{' '}
-                        {formatNumber(solution.po.z)})
-                      </code>
-                      <code>
-                        taut=[{solution.tautCables.join(', ') || '-'}]
-                      </code>
-                    </div>
-                  ))
-                ) : (
-                  <p className="empty-state">{t.results.noStableSolutions}</p>
-                )}
-              </div>
+              <>
+                <div className="solution-controls">
+                  <div
+                    className="mode-row solution-mode-row"
+                    role="group"
+                    aria-label={t.results.displayModeAriaLabel}
+                  >
+                    <button
+                      type="button"
+                      className={
+                        solutionDisplayMode === 'single' ? 'active' : ''
+                      }
+                      disabled={!indexedSolutions.length}
+                      onClick={() => setSolutionDisplayMode('single')}
+                    >
+                      {t.results.singleDisplay}
+                    </button>
+                    <button
+                      type="button"
+                      className={solutionDisplayMode === 'all' ? 'active' : ''}
+                      disabled={!indexedSolutions.length}
+                      onClick={() => setSolutionDisplayMode('all')}
+                    >
+                      {t.results.allDisplay}
+                    </button>
+                  </div>
+                  <label className="solution-select">
+                    <span>{t.results.selectedSolutionLabel}</span>
+                    <select
+                      value={activeSolutionIndex ?? ''}
+                      disabled={
+                        !indexedSolutions.length ||
+                        solutionDisplayMode === 'all'
+                      }
+                      onChange={(event) =>
+                        setSelectedSolutionIndex(
+                          Number(event.currentTarget.value),
+                        )
+                      }
+                    >
+                      {indexedSolutions.map(({ index, solution }) => {
+                        const stateLabel = solution.stable
+                          ? t.results.stableBadge
+                          : t.results.unstableBadge
+
+                        return (
+                          <option key={`solution-option-${index}`} value={index}>
+                            {t.results.solutionOption(index + 1, stateLabel)}
+                          </option>
+                        )
+                      })}
+                    </select>
+                  </label>
+                </div>
+                <div className="solution-list">
+                  {indexedSolutions.length ? (
+                    indexedSolutions.map(({ index, solution }) => {
+                      const stateLabel = solution.stable
+                        ? t.results.stableBadge
+                        : t.results.unstableBadge
+                      const shown =
+                        solutionDisplayMode === 'all' ||
+                        activeSolutionIndex === index
+
+                      return (
+                        <button
+                          type="button"
+                          className={`solution-row ${shown ? 'shown' : ''}`}
+                          key={`solution-${index}`}
+                          onClick={() => {
+                            setSelectedSolutionIndex(index)
+                            setSolutionDisplayMode('single')
+                          }}
+                        >
+                          <span className="solution-index">#{index + 1}</span>
+                          <span
+                            className={`solution-badge ${
+                              solution.stable ? 'stable' : 'unstable'
+                            }`}
+                          >
+                            {stateLabel}
+                          </span>
+                          <code>
+                            po=({formatNumber(solution.po.x)},{' '}
+                            {formatNumber(solution.po.y)},{' '}
+                            {formatNumber(solution.po.z)})
+                          </code>
+                          <code>
+                            taut=[{solution.tautCables.join(', ') || '-'}]
+                          </code>
+                        </button>
+                      )
+                    })
+                  ) : (
+                    <p className="empty-state">{t.results.noSolutions}</p>
+                  )}
+                </div>
+              </>
             ) : (
               <p className="empty-state">{solveState.message}</p>
             )}

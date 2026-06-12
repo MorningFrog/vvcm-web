@@ -417,10 +417,23 @@ button:hover {
 }
 
 .object-marker circle {
-  fill: #d33f49;
   stroke: #ffffff;
   stroke-width: 3;
   vector-effect: non-scaling-stroke;
+}
+
+.object-marker.stable circle {
+  fill: #2f7d46;
+}
+
+.object-marker.unstable circle {
+  fill: #b12d36;
+  stroke-dasharray: 5 4;
+}
+
+.object-marker .object-status {
+  font-size: 14px;
+  font-weight: 760;
 }
 
 .legend {
@@ -451,29 +464,100 @@ button:hover {
   background: #c56a1a;
 }
 
-.legend-item.object::before {
-  background: #d33f49;
+.legend-item.stable-solution::before {
+  background: #2f7d46;
+}
+
+.legend-item.unstable-solution::before {
+  background: #b12d36;
+}
+
+.solution-controls {
+  display: grid;
+  grid-template-columns: max-content minmax(180px, 1fr);
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.solution-mode-row {
+  width: max-content;
+  grid-template-columns: repeat(2, max-content);
+  gap: 4px;
+  margin-top: 0;
+  padding: 3px;
+  border-radius: 7px;
+}
+
+.solution-mode-row button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.solution-select {
+  display: grid;
+  gap: 5px;
+  color: #516063;
+  font-size: 12px;
+  font-weight: 760;
 }
 
 .solution-list {
   display: grid;
   gap: 8px;
+  max-height: 320px;
+  overflow: auto;
 }
 
 .solution-row {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) minmax(120px, auto);
+  grid-template-columns: 44px 84px minmax(0, 1fr) minmax(120px, auto);
   gap: 10px;
   align-items: center;
+  width: 100%;
   min-height: 42px;
+  border: 1px solid transparent;
   border-radius: 6px;
   padding: 6px 8px;
   background: #f6f9f8;
+  text-align: left;
 }
 
-.solution-row > span {
+.solution-row:hover {
+  border-color: #9bc7c4;
+}
+
+.solution-row.shown {
+  border-color: #007d7a;
+  background: #eef8f6;
+}
+
+.solution-index {
   color: #667476;
   font-weight: 800;
+}
+
+.solution-badge {
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.solution-badge.stable {
+  color: #1e5d34;
+  background: #dff1e5;
+}
+
+.solution-badge.unstable {
+  color: #8c252d;
+  background: #fae1e3;
 }
 
 code {
@@ -564,6 +648,7 @@ code {
 
   .field-grid,
   .selected-point,
+  .solution-controls,
   .solution-row,
   .editor-actions {
     grid-template-columns: 1fr;
