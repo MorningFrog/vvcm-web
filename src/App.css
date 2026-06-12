@@ -1,9 +1,15 @@
 .app-shell {
-  min-height: 100svh;
+  height: 100svh;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  box-sizing: border-box;
+  overflow: hidden;
   padding: 24px;
 }
 
 .app-header {
+  width: 100%;
   display: flex;
   justify-content: space-between;
   gap: 20px;
@@ -89,18 +95,32 @@
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(300px, 360px) minmax(560px, 1fr) minmax(300px, 380px);
+  grid-template-columns: minmax(320px, 380px) minmax(520px, 1fr) minmax(320px, 400px);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+  min-height: 0;
+  width: 100%;
   max-width: 1760px;
   margin: 0 auto;
+  overflow: hidden;
 }
 
 .control-column,
 .visual-column,
-.data-column {
-  display: grid;
+.result-column {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
+  padding-right: 2px;
+}
+
+.control-column > *,
+.visual-column > *,
+.result-column > * {
+  flex: 0 0 auto;
 }
 
 .panel,
@@ -647,8 +667,8 @@ button:hover {
 .solution-list {
   display: grid;
   gap: 8px;
-  max-height: 320px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .solution-row {
@@ -672,6 +692,15 @@ button:hover {
 .solution-row.shown {
   border-color: var(--solution-color, #007d7a);
   background: #eef8f6;
+}
+
+.result-column .solution-row {
+  grid-template-columns: 16px 44px minmax(76px, 1fr);
+  align-items: start;
+}
+
+.result-column .solution-row code {
+  grid-column: 1 / -1;
 }
 
 .solution-color-dot {
@@ -745,14 +774,32 @@ code {
   margin-top: 10px;
 }
 
+.json-block {
+  max-width: 100%;
+  overflow: auto;
+  margin: 0;
+  border-radius: 6px;
+  padding: 12px;
+  color: #203033;
+  background: #eaf0ee;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+.json-block code {
+  display: block;
+  overflow: visible;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  white-space: inherit;
+}
+
 @media (max-width: 1360px) {
   .workspace {
-    grid-template-columns: minmax(300px, 360px) minmax(560px, 1fr);
-  }
-
-  .data-column {
-    grid-column: 1 / -1;
-    grid-template-columns: 1fr 1fr minmax(220px, 0.6fr);
+    grid-template-columns: minmax(280px, 340px) minmax(440px, 1fr) minmax(300px, 360px);
   }
 
   textarea {
@@ -760,8 +807,11 @@ code {
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1120px) {
   .app-shell {
+    height: auto;
+    min-height: 100svh;
+    overflow: visible;
     padding: 16px;
   }
 
@@ -774,13 +824,16 @@ code {
     justify-content: flex-start;
   }
 
-  .workspace,
-  .data-column {
+  .workspace {
     grid-template-columns: 1fr;
+    overflow: visible;
   }
 
-  .data-column {
-    grid-column: auto;
+  .control-column,
+  .visual-column,
+  .result-column {
+    overflow: visible;
+    padding-right: 0;
   }
 
   .coordinate-canvas {

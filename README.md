@@ -58,6 +58,8 @@ npm run lint
 
 Use the parameter panel to set the robot count and hold height. The robot count is clamped to the supported UI range and keeps the sheet vertex count and robot position count aligned.
 
+On desktop, the workspace uses three independently scrolling columns: sheet vertex and robot position inputs, including JSON editors, on the left; the coordinate canvas and 3D view in the center; FK results and FK result JSON on the right.
+
 The default interface language is English. Use the language selector in the header to switch between English and Simplified Chinese. The selected language is saved in local browser storage and reused on the next visit.
 
 Use the index selector in the header to choose 0-based or 1-based display labels. The setting is saved in local browser storage and keeps sheet vertex labels, robot labels, FK solution labels, object marker labels, and taut cable lists consistent.

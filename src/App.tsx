@@ -20,7 +20,6 @@ import {
   localeOptions,
   storeLocale,
   translations,
-  type LabelKey,
   type Locale,
   type Messages,
   type ParseErrorCode,
@@ -124,7 +123,7 @@ type StatusMessage =
     }
   | {
       type: 'copied'
-      label: LabelKey
+      label: string
     }
   | {
       type: 'copyFailed'
@@ -371,6 +370,18 @@ const allConfigToJson = (
     2,
   )
 
+const fkResultToJson = (solveState: SolveState) =>
+  JSON.stringify(
+    solveState.status === 'ok'
+      ? solveState.result
+      : {
+          status: 'error',
+          message: solveState.message,
+        },
+    null,
+    2,
+  )
+
 const pointFromUnknown = (value: unknown): Point | null => {
   if (Array.isArray(value) && value.length >= 2) {
     const x = Number(value[0])
@@ -546,7 +557,7 @@ const formatStatusMessage = (status: StatusMessage, t: Messages) => {
         ? t.status.sheetTextSynced
         : t.status.robotsTextSynced
     case 'copied':
-      return t.status.copied(t.labels[status.label])
+      return t.status.copied(status.label)
     case 'copyFailed':
       return t.status.copyFailed(status.message)
     case 'parseError':
@@ -703,6 +714,7 @@ function App() {
         : t.results.noSolutions
       : solveState.message
   const showTautCableSegments = displayedSolutionEntries.length === 1
+  const fkResultJson = useMemo(() => fkResultToJson(solveState), [solveState])
 
   const canvasPoints = useMemo(() => {
     const points = [...sheet, ...robots]
@@ -1044,7 +1056,7 @@ function App() {
     }
   }
 
-  const copyText = async (label: LabelKey, text: string) => {
+  const copyText = async (label: string, text: string) => {
     try {
       await navigator.clipboard.writeText(text)
       setStatus({ type: 'copied', label })
@@ -1055,7 +1067,7 @@ function App() {
 
   const copyAllConfig = () =>
     copyText(
-      'allConfig',
+      t.labels.allConfig,
       allConfigToJson(robotCount, holdHeight, sheet, robots),
     )
 
@@ -1229,6 +1241,49 @@ function App() {
             }}
             onChange={handlePointTableChange}
           />
+
+          <DataEditor
+            applyLabel={t.data.apply}
+            copyLabel={t.data.copy}
+            dirtyLabel={t.data.dirty}
+            syncedLabel={t.data.synced}
+            syncLabel={t.data.sync}
+            title={t.data.sheetJsonTitle}
+            value={visibleSheetText}
+            dirty={sheetTextDirty}
+            onChange={(value) => {
+              setSheetText(value)
+              setSheetTextDirty(true)
+            }}
+            onApply={() => applyPointText('sheet')}
+            onSync={() => syncPointText('sheet')}
+            onCopy={() => copyText(t.labels.sheet, pointsToJson(sheet))}
+          />
+
+          <DataEditor
+            applyLabel={t.data.apply}
+            copyLabel={t.data.copy}
+            dirtyLabel={t.data.dirty}
+            syncedLabel={t.data.synced}
+            syncLabel={t.data.sync}
+            title={t.data.robotsJsonTitle}
+            value={visibleRobotsText}
+            dirty={robotsTextDirty}
+            onChange={(value) => {
+              setRobotsText(value)
+              setRobotsTextDirty(true)
+            }}
+            onApply={() => applyPointText('robots')}
+            onSync={() => syncPointText('robots')}
+            onCopy={() => copyText(t.labels.robots, pointsToJson(robots))}
+          />
+
+          <section className="panel status-panel">
+            <div className="panel-heading">
+              <h2>{t.data.statusTitle}</h2>
+            </div>
+            <p>{statusText}</p>
+          </section>
         </aside>
 
         <section className="visual-column">
@@ -1552,7 +1607,9 @@ function App() {
             solutionMessage={sceneSolutionMessage}
             visibleSolutions={visibleSceneSolutions}
           />
+        </section>
 
+        <aside className="result-column" aria-label={t.results.title}>
           <section className="result-panel">
             <div className="panel-heading">
               <h2>{t.results.title}</h2>
@@ -1679,51 +1736,13 @@ function App() {
               <p className="empty-state">{solveState.message}</p>
             )}
           </section>
-        </section>
 
-        <aside className="data-column" aria-label={t.data.ariaLabel}>
-          <DataEditor
-            applyLabel={t.data.apply}
+          <JsonPreview
             copyLabel={t.data.copy}
-            dirtyLabel={t.data.dirty}
-            syncedLabel={t.data.synced}
-            syncLabel={t.data.sync}
-            title={t.data.sheetJsonTitle}
-            value={visibleSheetText}
-            dirty={sheetTextDirty}
-            onChange={(value) => {
-              setSheetText(value)
-              setSheetTextDirty(true)
-            }}
-            onApply={() => applyPointText('sheet')}
-            onSync={() => syncPointText('sheet')}
-            onCopy={() => copyText('sheet', pointsToJson(sheet))}
+            title={`${t.results.title} JSON`}
+            value={fkResultJson}
+            onCopy={() => copyText(`${t.results.title} JSON`, fkResultJson)}
           />
-
-          <DataEditor
-            applyLabel={t.data.apply}
-            copyLabel={t.data.copy}
-            dirtyLabel={t.data.dirty}
-            syncedLabel={t.data.synced}
-            syncLabel={t.data.sync}
-            title={t.data.robotsJsonTitle}
-            value={visibleRobotsText}
-            dirty={robotsTextDirty}
-            onChange={(value) => {
-              setRobotsText(value)
-              setRobotsTextDirty(true)
-            }}
-            onApply={() => applyPointText('robots')}
-            onSync={() => syncPointText('robots')}
-            onCopy={() => copyText('robots', pointsToJson(robots))}
-          />
-
-          <section className="panel status-panel">
-            <div className="panel-heading">
-              <h2>{t.data.statusTitle}</h2>
-            </div>
-            <p>{statusText}</p>
-          </section>
         </aside>
       </section>
     </main>
@@ -1874,6 +1893,27 @@ function DataEditor({
           {copyLabel}
         </button>
       </div>
+    </section>
+  )
+}
+
+type JsonPreviewProps = {
+  copyLabel: string
+  title: string
+  value: string
+  onCopy: () => void
+}
+
+function JsonPreview({ copyLabel, title, value, onCopy }: JsonPreviewProps) {
+  return (
+    <section className="panel json-preview">
+      <div className="panel-heading">
+        <h2>{title}</h2>
+        <button type="button" className="secondary-button" onClick={onCopy}>
+          {copyLabel}
+        </button>
+      </div>
+      <pre className="json-block"><code>{value}</code></pre>
     </section>
   )
 }
