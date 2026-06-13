@@ -2,6 +2,8 @@
 
 VVCM Web is a React, TypeScript, and Vite visual test bench for the `@morningfrog/vvcm-rs` WebAssembly package. It helps inspect VVCM kinematics inputs and outputs for multi-robot transporting system with a deformable sheet.
 
+Open the visual test bench at [vvcm-web](https://morningfrog.github.io/vvcm-web/).
+
 ## Features
 
 * Configure the robot count, which also controls the deformable sheet vertex count.
