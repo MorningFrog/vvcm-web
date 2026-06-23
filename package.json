@@ -22,7 +22,7 @@
     "screenshot:install": "playwright install chromium"
   },
   "dependencies": {
-    "@morningfrog/vvcm-rs": "^1.2.0",
+    "@morningfrog/vvcm-rs": "^2.0.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "three": "^0.184.0"

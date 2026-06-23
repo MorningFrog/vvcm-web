@@ -3,7 +3,6 @@ import {
   version,
   type FkSolutionOutput,
   type FkSolutionsOutput,
-  type Point2Input,
 } from '@morningfrog/vvcm-rs'
 import {
   useCallback,
@@ -322,8 +321,19 @@ const formatIndexList = (indices: readonly number[], indexBase: IndexBase) =>
     ? indices.map((index) => displayIndex(index, indexBase)).join(', ')
     : '-'
 
-const toPointInput = (points: Point[]): Point2Input[] =>
-  points.map((point) => [point.x, point.y] as const)
+const formatNumberList = (values: readonly number[]) =>
+  values.length ? values.map((value) => formatNumber(value)).join(', ') : '-'
+
+const toPointMatrixInput = (points: Point[]) => {
+  const input = new Float32Array(points.length * 2)
+
+  points.forEach((point, index) => {
+    input[index * 2] = point.x
+    input[index * 2 + 1] = point.y
+  })
+
+  return input
+}
 
 const makePolygon = (count: number, radius: number, phase = -Math.PI / 2) =>
   Array.from({ length: count }, (_, index) => {
@@ -737,10 +747,10 @@ function App() {
     }
 
     try {
-      const fk = new VvcmFk(robotCount, holdHeight, toPointInput(sheet))
+      const fk = new VvcmFk(holdHeight, toPointMatrixInput(sheet))
 
       try {
-        const result = fk.updateStableSolutions(toPointInput(robots))
+        const result = fk.updateStableSolutions(toPointMatrixInput(robots))
 
         return { status: 'ok', result }
       } catch (error) {
@@ -1951,6 +1961,9 @@ function App() {
                           </code>
                           <code>
                             taut=[{formatIndexList(solution.tautCables, indexBase)}]
+                          </code>
+                          <code>
+                            lambda=[{formatNumberList(solution.lambdaValues)}]
                           </code>
                         </button>
                       )

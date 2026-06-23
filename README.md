@@ -15,7 +15,7 @@ Open the visual test bench at [vvcm-web](https://morningfrog.github.io/vvcm-web/
 * Inspect robot ground points `r#`, elevated `p# hold point` markers, FK object points `po`, and taut `p#-po` links in a Z-up Three.js 3D view.
 * Import, edit, sync, and copy point arrays as JSON.
 * Copy and paste the full solver configuration, including `robotCount`, `holdHeight`, `sheet`, and `formation`.
-* Run `VvcmFk` in the browser and display candidate solution counts, stability labels, object poses, virtual object points, and taut cable indices.
+* Run `VvcmFk` in the browser and display candidate solution counts, stability labels, object poses, virtual object points, taut cable indices, and matching lambda values.
 * Visualize the sheet polygon, robot formation, cable reference lines, single-solution taut `vi-vo` and `ri-ro` segments, and selected or all FK solution positions with matching solution colors in the canvas and FK result list.
 * Switch displayed indices between 0-based and 1-based labels for points, FK solutions, object markers, and taut cable lists.
 * Switch the interface language between Simplified Chinese and English.
@@ -110,11 +110,14 @@ The point tables provide precise numeric editing. The JSON editors accept arrays
 The FK result panel calls:
 
 ```ts
-const fk = new VvcmFk(robotCount, holdHeight, sheet)
-const solutions = fk.updateStableSolutions(formation)
+const sheetInput = new Float32Array(sheet.flatMap(({ x, y }) => [x, y]))
+const formationInput = new Float32Array(formation.flatMap(({ x, y }) => [x, y]))
+const fk = new VvcmFk(holdHeight, sheetInput)
+const solutions = fk.updateStableSolutions(formationInput)
+fk.free()
 ```
 
-The FK result panel lists every candidate branch from `solutions.solutions`, marks each branch as stable or unstable, shows each branch's `po` and `vo`, and lets you show one branch or all branches on the canvas. When exactly one branch is visible, taut cables from that branch are highlighted as `vi-vo` and `ri-ro` segments. In all-branches mode, object and virtual-object markers for every branch are drawn while taut segments are hidden to keep the canvas readable.
+The FK result panel lists every candidate branch from `solutions.solutions`, marks each branch as stable or unstable, shows each branch's `po`, `vo`, taut cable indices, and taut-only lambda values, and lets you show one branch or all branches on the canvas. When exactly one branch is visible, taut cables from that branch are highlighted as `vi-vo` and `ri-ro` segments. In all-branches mode, object and virtual-object markers for every branch are drawn while taut segments are hidden to keep the canvas readable.
 
 ## Data Format
 
