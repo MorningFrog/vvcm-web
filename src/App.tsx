@@ -90,6 +90,18 @@ type GridLines = {
   horizontal: number[]
 }
 
+type ConstraintValidation = {
+  distanceViolations: Array<{
+    firstIndex: number
+    secondIndex: number
+  }>
+  invalidSheet: boolean
+  invalidRobots: boolean
+  windingMismatch: boolean
+  violatingSheetIndices: number[]
+  violatingRobotIndices: number[]
+}
+
 type CanvasMetrics = {
   labelSize: number
   statusSize: number
@@ -154,6 +166,14 @@ type StatusMessage =
       max: number
     }
   | {
+      type: 'constraintDragConstrained'
+      label: string
+    }
+  | {
+      type: 'constraintDragRejected'
+      label: string
+    }
+  | {
       type: 'error'
       message: string
     }
@@ -166,6 +186,10 @@ const DEFAULT_INDEX_BASE: IndexBase = 1
 const INDEX_BASE_STORAGE_KEY = 'vvcm-web.index-base.v1'
 const EMPTY_SOLUTIONS: FkSolutionOutput[] = []
 const GITHUB_ICON_HREF = `${import.meta.env.BASE_URL}icons.svg#github-icon`
+const GEOMETRY_TOLERANCE = 1e-6
+const CONSTRAINT_PROJECTION_PASSES = 28
+const CONSTRAINT_ARC_SAMPLES = 192
+const CONSTRAINT_LINE_SAMPLES = 180
 
 class PointParseError extends Error {
   code: ParseErrorCode
@@ -567,6 +591,661 @@ const toSvgPoint = (point: Point) => ({
   y: -point.y,
 })
 
+const squaredDistance = (a: Point, b: Point) => {
+  const deltaX = a.x - b.x
+  const deltaY = a.y - b.y
+  return deltaX * deltaX + deltaY * deltaY
+}
+
+const distance = (a: Point, b: Point) => Math.sqrt(squaredDistance(a, b))
+
+const cross = (a: Point, b: Point, c: Point) =>
+  (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+
+const replacePoint = (points: Point[], index: number, point: Point) =>
+  points.map((item, itemIndex) => (itemIndex === index ? point : item))
+
+const signedPolygonArea = (points: Point[]) =>
+  points.reduce((sum, point, index) => {
+    const next = points[(index + 1) % points.length]
+    return sum + point.x * next.y - next.x * point.y
+  }, 0) / 2
+
+const polygonWinding = (points: Point[]) => {
+  const area = signedPolygonArea(points)
+  if (Math.abs(area) <= GEOMETRY_TOLERANCE) {
+    return 0
+  }
+
+  return area > 0 ? 1 : -1
+}
+
+const invalidConvexVertexIndices = (points: Point[]) => {
+  const winding = polygonWinding(points)
+  if (points.length < 3 || winding === 0) {
+    return points.map((_, index) => index)
+  }
+
+  const invalid = new Set<number>()
+
+  points.forEach((point, index) => {
+    const previousIndex = (index - 1 + points.length) % points.length
+    const nextIndex = (index + 1) % points.length
+    const turn = cross(points[previousIndex], point, points[nextIndex])
+
+    if (Math.abs(turn) <= GEOMETRY_TOLERANCE || Math.sign(turn) !== winding) {
+      invalid.add(previousIndex)
+      invalid.add(index)
+      invalid.add(nextIndex)
+    }
+  })
+
+  return [...invalid].sort((a, b) => a - b)
+}
+
+const pairwiseDistanceMatrix = (points: Point[]) =>
+  points.map((point, firstIndex) =>
+    points.map((otherPoint, secondIndex) =>
+      firstIndex === secondIndex ? 0 : distance(point, otherPoint),
+    ),
+  )
+
+const validateGeometryConstraint = (
+  sheet: Point[],
+  robots: Point[],
+): ConstraintValidation => {
+  const sheetDistances = pairwiseDistanceMatrix(sheet)
+  const robotDistances = pairwiseDistanceMatrix(robots)
+  const distanceViolations: ConstraintValidation['distanceViolations'] = []
+
+  for (
+    let firstIndex = 0;
+    firstIndex < Math.min(sheet.length, robots.length);
+    firstIndex += 1
+  ) {
+    for (
+      let secondIndex = firstIndex + 1;
+      secondIndex < Math.min(sheet.length, robots.length);
+      secondIndex += 1
+    ) {
+      if (
+        robotDistances[firstIndex][secondIndex] >
+        sheetDistances[firstIndex][secondIndex] + GEOMETRY_TOLERANCE
+      ) {
+        distanceViolations.push({ firstIndex, secondIndex })
+      }
+    }
+  }
+
+  const violatingSheetIndices = new Set<number>()
+  const violatingRobotIndices = new Set<number>()
+
+  distanceViolations.forEach(({ firstIndex, secondIndex }) => {
+    violatingSheetIndices.add(firstIndex)
+    violatingSheetIndices.add(secondIndex)
+    violatingRobotIndices.add(firstIndex)
+    violatingRobotIndices.add(secondIndex)
+  })
+
+  const invalidSheetVertices = invalidConvexVertexIndices(sheet)
+  const invalidRobotVertices = invalidConvexVertexIndices(robots)
+  invalidSheetVertices.forEach((index) => violatingSheetIndices.add(index))
+  invalidRobotVertices.forEach((index) => violatingRobotIndices.add(index))
+
+  const sheetWinding = polygonWinding(sheet)
+  const robotWinding = polygonWinding(robots)
+  const windingMismatch =
+    sheetWinding !== 0 && robotWinding !== 0 && sheetWinding !== robotWinding
+
+  if (windingMismatch) {
+    sheet.forEach((_, index) => violatingSheetIndices.add(index))
+    robots.forEach((_, index) => violatingRobotIndices.add(index))
+  }
+
+  return {
+    distanceViolations,
+    invalidSheet: invalidSheetVertices.length > 0,
+    invalidRobots: invalidRobotVertices.length > 0,
+    windingMismatch,
+    violatingSheetIndices: [...violatingSheetIndices].sort((a, b) => a - b),
+    violatingRobotIndices: [...violatingRobotIndices].sort((a, b) => a - b),
+  }
+}
+
+const isGeometryConstraintValid = (sheet: Point[], robots: Point[]) => {
+  const validation = validateGeometryConstraint(sheet, robots)
+  return (
+    validation.distanceViolations.length === 0 &&
+    !validation.invalidSheet &&
+    !validation.invalidRobots &&
+    !validation.windingMismatch
+  )
+}
+
+type CircleConstraint = {
+  center: Point
+  mode: 'inside' | 'outside'
+  radius: number
+}
+
+type HalfPlaneConstraint = {
+  kind: 'chord' | 'extension'
+  start: Point
+  end: Point
+  value: (point: Point) => number
+  gradient: Point
+}
+
+const makeHalfPlane = (
+  kind: HalfPlaneConstraint['kind'],
+  start: Point,
+  end: Point,
+  value: (point: Point) => number,
+  gradient: Point,
+): HalfPlaneConstraint => ({
+  end,
+  gradient,
+  kind,
+  start,
+  value,
+})
+
+const activeWindingForKind = (
+  kind: PointKind,
+  sheet: Point[],
+  robots: Point[],
+) => {
+  const reference = polygonWinding(kind === 'robots' ? sheet : robots)
+  if (reference !== 0) {
+    return reference
+  }
+
+  const fallback = polygonWinding(kind === 'robots' ? robots : sheet)
+  return fallback === 0 ? 1 : fallback
+}
+
+const buildDistanceConstraints = (
+  kind: PointKind,
+  index: number,
+  sheet: Point[],
+  robots: Point[],
+): CircleConstraint[] =>
+  Array.from({ length: Math.min(sheet.length, robots.length) }, (_, otherIndex) => {
+    if (otherIndex === index) {
+      return null
+    }
+
+    return kind === 'robots'
+      ? {
+          center: robots[otherIndex],
+          mode: 'inside' as const,
+          radius: distance(sheet[index], sheet[otherIndex]),
+        }
+      : {
+          center: sheet[otherIndex],
+          mode: 'outside' as const,
+          radius: distance(robots[index], robots[otherIndex]),
+        }
+  }).filter(
+    (constraint): constraint is CircleConstraint =>
+      constraint !== null && Number.isFinite(constraint.radius),
+  )
+
+const buildConvexityConstraints = (
+  kind: PointKind,
+  index: number,
+  sheet: Point[],
+  robots: Point[],
+): HalfPlaneConstraint[] => {
+  const polygon = kind === 'robots' ? robots : sheet
+  const count = polygon.length
+  if (count < 3) {
+    return []
+  }
+
+  const winding = activeWindingForKind(kind, sheet, robots)
+  const previousIndex = (index - 1 + count) % count
+  const nextIndex = (index + 1) % count
+  const previousPreviousIndex = (index - 2 + count) % count
+  const nextNextIndex = (index + 2) % count
+  const previous = polygon[previousIndex]
+  const next = polygon[nextIndex]
+  const previousPrevious = polygon[previousPreviousIndex]
+  const nextNext = polygon[nextNextIndex]
+
+  const constraints = [
+    makeHalfPlane(
+      'chord',
+      previous,
+      next,
+      (point) => cross(previous, point, next) * winding,
+      {
+        x: (next.y - previous.y) * winding,
+        y: -(next.x - previous.x) * winding,
+      },
+    ),
+  ]
+
+  if (count >= 4) {
+    constraints.push(
+      makeHalfPlane(
+        'extension',
+        previousPrevious,
+        previous,
+        (point) => cross(previousPrevious, previous, point) * winding,
+        {
+          x: -(previous.y - previousPrevious.y) * winding,
+          y: (previous.x - previousPrevious.x) * winding,
+        },
+      ),
+      makeHalfPlane(
+        'extension',
+        nextNext,
+        next,
+        (point) => cross(point, next, nextNext) * winding,
+        {
+          x: (next.y - nextNext.y) * winding,
+          y: (nextNext.x - next.x) * winding,
+        },
+      ),
+    )
+  }
+
+  return constraints
+}
+
+const projectToCircleConstraint = (
+  point: Point,
+  constraint: CircleConstraint,
+) => {
+  const deltaX = point.x - constraint.center.x
+  const deltaY = point.y - constraint.center.y
+  const currentDistance = Math.hypot(deltaX, deltaY)
+  const safeDistance =
+    currentDistance <= GEOMETRY_TOLERANCE ? GEOMETRY_TOLERANCE : currentDistance
+
+  if (
+    constraint.mode === 'inside' &&
+    currentDistance <= constraint.radius + GEOMETRY_TOLERANCE
+  ) {
+    return point
+  }
+
+  if (
+    constraint.mode === 'outside' &&
+    currentDistance + GEOMETRY_TOLERANCE >= constraint.radius
+  ) {
+    return point
+  }
+
+  const direction =
+    currentDistance <= GEOMETRY_TOLERANCE ? { x: 1, y: 0 } : {
+      x: deltaX / safeDistance,
+      y: deltaY / safeDistance,
+    }
+
+  return {
+    x: constraint.center.x + direction.x * constraint.radius,
+    y: constraint.center.y + direction.y * constraint.radius,
+  }
+}
+
+const projectToHalfPlaneConstraint = (
+  point: Point,
+  constraint: HalfPlaneConstraint,
+) => {
+  const value = constraint.value(point)
+  if (value >= GEOMETRY_TOLERANCE) {
+    return point
+  }
+
+  const gradientLengthSquared = squaredDistance(constraint.gradient, {
+    x: 0,
+    y: 0,
+  })
+  if (gradientLengthSquared <= GEOMETRY_TOLERANCE) {
+    return point
+  }
+
+  const offset = (GEOMETRY_TOLERANCE - value) / gradientLengthSquared
+  return {
+    x: point.x + constraint.gradient.x * offset,
+    y: point.y + constraint.gradient.y * offset,
+  }
+}
+
+const applyProjectionPasses = (
+  start: Point,
+  circleConstraints: CircleConstraint[],
+  halfPlaneConstraints: HalfPlaneConstraint[],
+) => {
+  let point = start
+
+  for (let pass = 0; pass < CONSTRAINT_PROJECTION_PASSES; pass += 1) {
+    circleConstraints.forEach((constraint) => {
+      point = projectToCircleConstraint(point, constraint)
+    })
+    halfPlaneConstraints.forEach((constraint) => {
+      point = projectToHalfPlaneConstraint(point, constraint)
+    })
+  }
+
+  return point
+}
+
+const circleIntersections = (
+  first: CircleConstraint,
+  second: CircleConstraint,
+) => {
+  const dx = second.center.x - first.center.x
+  const dy = second.center.y - first.center.y
+  const centerDistance = Math.hypot(dx, dy)
+
+  if (
+    centerDistance <= GEOMETRY_TOLERANCE ||
+    centerDistance > first.radius + second.radius + GEOMETRY_TOLERANCE ||
+    centerDistance < Math.abs(first.radius - second.radius) - GEOMETRY_TOLERANCE
+  ) {
+    return []
+  }
+
+  const a =
+    (first.radius * first.radius -
+      second.radius * second.radius +
+      centerDistance * centerDistance) /
+    (2 * centerDistance)
+  const heightSquared = first.radius * first.radius - a * a
+  if (heightSquared < -GEOMETRY_TOLERANCE) {
+    return []
+  }
+
+  const height = Math.sqrt(Math.max(0, heightSquared))
+  const baseX = first.center.x + (a * dx) / centerDistance
+  const baseY = first.center.y + (a * dy) / centerDistance
+  const offsetX = (-dy * height) / centerDistance
+  const offsetY = (dx * height) / centerDistance
+
+  return [
+    { x: baseX + offsetX, y: baseY + offsetY },
+    { x: baseX - offsetX, y: baseY - offsetY },
+  ]
+}
+
+const nearestLegalGeometryPoint = (
+  kind: PointKind,
+  index: number,
+  target: Point,
+  current: Point,
+  sheet: Point[],
+  robots: Point[],
+) => {
+  const circleConstraints = buildDistanceConstraints(kind, index, sheet, robots)
+  const halfPlaneConstraints = buildConvexityConstraints(
+    kind,
+    index,
+    sheet,
+    robots,
+  )
+  const isCandidateValid = (candidate: Point) =>
+    kind === 'robots'
+      ? isGeometryConstraintValid(sheet, replacePoint(robots, index, candidate))
+      : isGeometryConstraintValid(replacePoint(sheet, index, candidate), robots)
+  const seeds: Point[] = [target, current]
+
+  circleConstraints.forEach((constraint) => {
+    seeds.push(projectToCircleConstraint(target, constraint))
+  })
+
+  for (
+    let firstIndex = 0;
+    firstIndex < circleConstraints.length;
+    firstIndex += 1
+  ) {
+    for (
+      let secondIndex = firstIndex + 1;
+      secondIndex < circleConstraints.length;
+      secondIndex += 1
+    ) {
+      seeds.push(
+        ...circleIntersections(
+          circleConstraints[firstIndex],
+          circleConstraints[secondIndex],
+        ),
+      )
+    }
+  }
+
+  halfPlaneConstraints.forEach((constraint) => {
+    seeds.push(projectToHalfPlaneConstraint(target, constraint))
+  })
+
+  const candidates = seeds
+    .map((seed) =>
+      applyProjectionPasses(seed, circleConstraints, halfPlaneConstraints),
+    )
+    .filter(isCandidateValid)
+
+  if (!candidates.length) {
+    const fallback = clampAlongDragPath(current, target, isCandidateValid)
+    return fallback
+  }
+
+  const point = candidates.reduce((best, candidate) =>
+    squaredDistance(candidate, target) < squaredDistance(best, target)
+      ? candidate
+      : best,
+  )
+
+  return {
+    constrained: squaredDistance(point, target) > GEOMETRY_TOLERANCE,
+    point,
+  }
+}
+
+const satisfiesCircleConstraint = (
+  point: Point,
+  constraint: CircleConstraint,
+) => {
+  const currentDistance = distance(point, constraint.center)
+
+  return constraint.mode === 'inside'
+    ? currentDistance <= constraint.radius + GEOMETRY_TOLERANCE
+    : currentDistance + GEOMETRY_TOLERANCE >= constraint.radius
+}
+
+const isPointAllowedByConstraints = (
+  point: Point,
+  circleConstraints: CircleConstraint[],
+  halfPlaneConstraints: HalfPlaneConstraint[],
+  ignoredCircleIndex = -1,
+  ignoredHalfPlaneIndex = -1,
+) =>
+  circleConstraints.every(
+    (constraint, index) =>
+      index === ignoredCircleIndex ||
+      satisfiesCircleConstraint(point, constraint),
+  ) &&
+  halfPlaneConstraints.every(
+    (constraint, index) =>
+      index === ignoredHalfPlaneIndex ||
+      constraint.value(point) >= -GEOMETRY_TOLERANCE,
+  )
+
+const splitBoundarySamples = (
+  samples: Array<Point | null>,
+  wrap = false,
+) => {
+  const segments: Point[][] = []
+  let current: Point[] = []
+
+  samples.forEach((sample) => {
+    if (sample) {
+      current.push(sample)
+      return
+    }
+
+    if (current.length >= 2) {
+      segments.push(current)
+    }
+    current = []
+  })
+
+  if (current.length >= 2) {
+    segments.push(current)
+  }
+
+  if (
+    wrap &&
+    segments.length > 1 &&
+    samples[0] &&
+    samples[samples.length - 1]
+  ) {
+    const last = segments.pop()
+    const first = segments.shift()
+    if (first && last) {
+      segments.unshift([...last, ...first])
+    }
+  }
+
+  return segments
+}
+
+const buildCircleBoundarySegments = (
+  circleConstraints: CircleConstraint[],
+  halfPlaneConstraints: HalfPlaneConstraint[],
+) =>
+  circleConstraints.flatMap((constraint, constraintIndex) => {
+    if (constraint.radius <= GEOMETRY_TOLERANCE) {
+      return []
+    }
+
+    const samples = Array.from(
+      { length: CONSTRAINT_ARC_SAMPLES },
+      (_, sampleIndex) => {
+        const angle = (Math.PI * 2 * sampleIndex) / CONSTRAINT_ARC_SAMPLES
+        const point = {
+          x: constraint.center.x + Math.cos(angle) * constraint.radius,
+          y: constraint.center.y + Math.sin(angle) * constraint.radius,
+        }
+
+        return isPointAllowedByConstraints(
+          point,
+          circleConstraints,
+          halfPlaneConstraints,
+          constraintIndex,
+        )
+          ? point
+          : null
+      },
+    )
+
+    return splitBoundarySamples(samples, true).map((points) => ({
+      mode: constraint.mode,
+      points,
+    }))
+  })
+
+const buildLineBoundarySegments = (
+  circleConstraints: CircleConstraint[],
+  halfPlaneConstraints: HalfPlaneConstraint[],
+  viewBox: ViewBox,
+) =>
+  halfPlaneConstraints.flatMap((constraint, constraintIndex) => {
+    const displayLine =
+      constraint.kind === 'extension'
+        ? extendedLine(constraint.start, constraint.end, viewBox)
+        : { start: constraint.start, end: constraint.end }
+    const samples = Array.from(
+      { length: CONSTRAINT_LINE_SAMPLES + 1 },
+      (_, sampleIndex) => {
+        const t = sampleIndex / CONSTRAINT_LINE_SAMPLES
+        const point = {
+          x: displayLine.start.x + (displayLine.end.x - displayLine.start.x) * t,
+          y: displayLine.start.y + (displayLine.end.y - displayLine.start.y) * t,
+        }
+
+        return isPointAllowedByConstraints(
+          point,
+          circleConstraints,
+          halfPlaneConstraints,
+          -1,
+          constraintIndex,
+        )
+          ? point
+          : null
+      },
+    )
+
+    return splitBoundarySamples(samples).map((points) => ({
+      kind: constraint.kind,
+      points,
+    }))
+  })
+
+const clampAlongDragPath = (
+  start: Point,
+  end: Point,
+  isValid: (point: Point) => boolean,
+) => {
+  if (isValid(end)) {
+    return { point: end, constrained: false }
+  }
+
+  if (!isValid(start)) {
+    return { point: start, constrained: true }
+  }
+
+  let low = 0
+  let high = 1
+
+  for (let iteration = 0; iteration < 32; iteration += 1) {
+    const mid = (low + high) / 2
+    const candidate = {
+      x: start.x + (end.x - start.x) * mid,
+      y: start.y + (end.y - start.y) * mid,
+    }
+
+    if (isValid(candidate)) {
+      low = mid
+    } else {
+      high = mid
+    }
+  }
+
+  return {
+    point: {
+      x: start.x + (end.x - start.x) * low,
+      y: start.y + (end.y - start.y) * low,
+    },
+    constrained: true,
+  }
+}
+
+const extendedLine = (start: Point, end: Point, viewBox: ViewBox) => {
+  const deltaX = end.x - start.x
+  const deltaY = end.y - start.y
+  const length = Math.hypot(deltaX, deltaY)
+  const span = Math.max(viewBox.width, viewBox.height) * 2
+
+  if (length <= GEOMETRY_TOLERANCE) {
+    return { start, end }
+  }
+
+  const unitX = deltaX / length
+  const unitY = deltaY / length
+
+  return {
+    start: {
+      x: start.x - unitX * span,
+      y: start.y - unitY * span,
+    },
+    end: {
+      x: end.x + unitX * span,
+      y: end.y + unitY * span,
+    },
+  }
+}
+
 const buildViewBox = (points: Point[]): ViewBox => {
   if (!points.length) {
     return { minX: -600, minY: -420, width: 1200, height: 840 }
@@ -681,6 +1360,10 @@ const formatStatusMessage = (status: StatusMessage, t: Messages) => {
       return t.parseErrors[status.code]
     case 'pointCountRange':
       return t.status.pointCountRange(status.min, status.max)
+    case 'constraintDragConstrained':
+      return t.status.constraintDragConstrained(status.label)
+    case 'constraintDragRejected':
+      return t.status.constraintDragRejected(status.label)
     case 'error':
       return status.message
   }
@@ -703,6 +1386,9 @@ function App() {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [showSheetView, setShowSheetView] = useState(true)
   const [showRobotView, setShowRobotView] = useState(true)
+  const [enforceGeometryConstraint, setEnforceGeometryConstraint] =
+    useState(false)
+  const [constraintDragRejected, setConstraintDragRejected] = useState(false)
   const [solutionDisplayMode, setSolutionDisplayMode] =
     useState<SolutionDisplayMode>('single')
   const [selectedSolutionIndex, setSelectedSolutionIndex] =
@@ -727,7 +1413,46 @@ function App() {
   const visibleSheetText = sheetTextDirty ? sheetText : currentSheetText
   const visibleRobotsText = robotsTextDirty ? robotsText : currentRobotsText
   const t = translations[locale]
-  const statusText = formatStatusMessage(status, t)
+  const constraintValidation = useMemo(
+    () => validateGeometryConstraint(sheet, robots),
+    [robots, sheet],
+  )
+  const constraintDistanceViolationLabels = useMemo(
+    () =>
+      constraintValidation.distanceViolations.map(
+        ({ firstIndex, secondIndex }) =>
+          t.canvas.constraintPairLabel(
+            pointLabel('robots', firstIndex, indexBase),
+            pointLabel('robots', secondIndex, indexBase),
+            pointLabel('sheet', firstIndex, indexBase),
+            pointLabel('sheet', secondIndex, indexBase),
+          ),
+      ),
+    [constraintValidation.distanceViolations, indexBase, t],
+  )
+  const hasConstraintViolation =
+    enforceGeometryConstraint &&
+    (constraintValidation.distanceViolations.length > 0 ||
+      constraintValidation.invalidSheet ||
+      constraintValidation.invalidRobots ||
+      constraintValidation.windingMismatch)
+  const constraintWarningText = constraintValidation.distanceViolations.length
+    ? t.canvas.constraintDistanceViolationWarning(
+        constraintDistanceViolationLabels.join(', '),
+      )
+    : constraintValidation.windingMismatch
+      ? t.canvas.constraintWindingWarning
+      : t.canvas.constraintConvexityWarning
+  const statusText =
+    hasConstraintViolation
+      ? constraintValidation.distanceViolations.length
+        ? t.status.constraintDistanceViolation(
+            constraintDistanceViolationLabels.join(', '),
+          )
+        : constraintValidation.windingMismatch
+          ? t.status.constraintWindingViolation
+          : t.status.constraintConvexityViolation
+      : formatStatusMessage(status, t)
 
   useEffect(() => {
     document.documentElement.lang = locale
@@ -844,6 +1569,22 @@ function App() {
   )
   const grid = useMemo(() => makeGrid(viewBox), [viewBox])
   const viewBoxText = `${viewBox.minX} ${viewBox.minY} ${viewBox.width} ${viewBox.height}`
+  const sheetPolygonPoints = useMemo(
+    () =>
+      sheet
+        .map(toSvgPoint)
+        .map((point) => `${point.x},${point.y}`)
+        .join(' '),
+    [sheet],
+  )
+  const violatingSheetIndexSet = useMemo(
+    () => new Set(constraintValidation.violatingSheetIndices),
+    [constraintValidation.violatingSheetIndices],
+  )
+  const violatingRobotIndexSet = useMemo(
+    () => new Set(constraintValidation.violatingRobotIndices),
+    [constraintValidation.violatingRobotIndices],
+  )
   const canvasStyle = useMemo(
     () =>
       ({
@@ -856,6 +1597,55 @@ function App() {
   const selectedPoints = selectedKind === 'sheet' ? sheet : robots
   const selectedPoint = selectedPoints[selectedIndex] ?? selectedPoints[0]
   const selectedLabel = pointLabel(selectedKind, selectedIndex, indexBase)
+  const activeConstraintDrag =
+    enforceGeometryConstraint && canvasInteraction?.type === 'point'
+      ? canvasInteraction
+      : null
+  const constraintCircleBoundarySegments = useMemo(() => {
+    if (!activeConstraintDrag) {
+      return []
+    }
+
+    const { index, kind } = activeConstraintDrag
+    const circleConstraints = buildDistanceConstraints(kind, index, sheet, robots)
+    const halfPlaneConstraints = buildConvexityConstraints(
+      kind,
+      index,
+      sheet,
+      robots,
+    )
+
+    return buildCircleBoundarySegments(
+      circleConstraints,
+      halfPlaneConstraints,
+    )
+  }, [activeConstraintDrag, robots, sheet])
+  const constraintLineBoundarySegments = useMemo(() => {
+    if (!activeConstraintDrag || robotCount < 3) {
+      return []
+    }
+
+    const { index, kind } = activeConstraintDrag
+    const circleConstraints = buildDistanceConstraints(kind, index, sheet, robots)
+    const halfPlaneConstraints = buildConvexityConstraints(
+      kind,
+      index,
+      sheet,
+      robots,
+    )
+
+    return buildLineBoundarySegments(
+      circleConstraints,
+      halfPlaneConstraints,
+      viewBox,
+    )
+  }, [
+    activeConstraintDrag,
+    robotCount,
+    robots,
+    sheet,
+    viewBox,
+  ])
 
   useEffect(() => {
     const svg = svgRef.current
@@ -909,6 +1699,47 @@ function App() {
         ),
       )
     }
+  }
+
+  const updateDraggedPoint = (kind: PointKind, index: number, point: Point) => {
+    const safePoint = { x: round(point.x), y: round(point.y) }
+
+    if (!enforceGeometryConstraint) {
+      setConstraintDragRejected(false)
+      updatePoint(kind, index, safePoint)
+      return
+    }
+
+    const label = pointLabel(kind, index, indexBase)
+    const currentPoint = getPointByKind(kind, index)
+    if (!currentPoint) {
+      return
+    }
+
+    const constrained = nearestLegalGeometryPoint(
+      kind,
+      index,
+      safePoint,
+      currentPoint,
+      sheet,
+      robots,
+    )
+
+    if (constrained.constrained) {
+      setConstraintDragRejected(true)
+      setStatus({ type: 'constraintDragConstrained', label })
+    } else {
+      setConstraintDragRejected(false)
+    }
+
+    if (squaredDistance(currentPoint, constrained.point) <= GEOMETRY_TOLERANCE) {
+      if (constrained.constrained) {
+        setStatus({ type: 'constraintDragRejected', label })
+      }
+      return
+    }
+
+    updatePoint(kind, index, constrained.point)
   }
 
   const handleRobotCountChange = (value: number) => {
@@ -984,6 +1815,7 @@ function App() {
         return
       }
 
+      setConstraintDragRejected(false)
       setSelectedKind(kind)
       setSelectedIndex(index)
       setCanvasInteraction({
@@ -1005,7 +1837,7 @@ function App() {
     if (canvasInteraction.type === 'point') {
       const point = getCanvasPoint(event)
       if (point) {
-        updatePoint(canvasInteraction.kind, canvasInteraction.index, {
+        updateDraggedPoint(canvasInteraction.kind, canvasInteraction.index, {
           x: point.x + canvasInteraction.offsetX,
           y: point.y + canvasInteraction.offsetY,
         })
@@ -1041,6 +1873,7 @@ function App() {
     }
 
     setCanvasInteraction(null)
+    setConstraintDragRejected(false)
     if (svgRef.current?.hasPointerCapture(event.pointerId)) {
       svgRef.current.releasePointerCapture(event.pointerId)
     }
@@ -1501,6 +2334,30 @@ function App() {
                       />
                       <span>{t.canvas.showRobotView}</span>
                     </label>
+                    <label
+                      className={`canvas-layer-toggle constraint-toggle ${
+                        hasConstraintViolation ? 'warning' : ''
+                      }`}
+                      title={
+                        hasConstraintViolation
+                          ? constraintWarningText
+                          : t.canvas.geometryConstraintHint
+                      }
+                    >
+                      <input
+                        type="checkbox"
+                        aria-invalid={hasConstraintViolation}
+                        aria-label={t.canvas.geometryConstraint}
+                        checked={enforceGeometryConstraint}
+                        onChange={(event) => {
+                          setEnforceGeometryConstraint(
+                            event.currentTarget.checked,
+                          )
+                          setConstraintDragRejected(false)
+                        }}
+                      />
+                      <span>{t.canvas.geometryConstraint}</span>
+                    </label>
                   </div>
                   <div
                     className="canvas-tools"
@@ -1548,7 +2405,9 @@ function App() {
               ref={svgRef}
               className={`coordinate-canvas ${
                 canvasInteraction?.type === 'pan' ? 'panning' : ''
-              } ${canvasInteraction?.type === 'point' ? 'point-dragging' : ''}`}
+              } ${
+                canvasInteraction?.type === 'point' ? 'point-dragging' : ''
+              } ${constraintDragRejected ? 'constraint-rejected' : ''}`}
               style={canvasStyle}
               viewBox={viewBoxText}
               role="img"
@@ -1602,11 +2461,38 @@ function App() {
               {showSheetView && (
                 <polygon
                   className="sheet-polygon"
-                  points={sheet
-                    .map(toSvgPoint)
-                    .map((point) => `${point.x},${point.y}`)
-                    .join(' ')}
+                  points={sheetPolygonPoints}
                 />
+              )}
+              {activeConstraintDrag && (
+                <g
+                  className={`constraint-guides ${
+                    constraintDragRejected || hasConstraintViolation
+                      ? 'warning'
+                      : ''
+                  }`}
+                >
+                  {constraintCircleBoundarySegments.map((segment, index) => (
+                    <polyline
+                      className={`constraint-guide-arc ${segment.mode}`}
+                      key={`constraint-arc-${index}`}
+                      points={segment.points
+                        .map(toSvgPoint)
+                        .map((point) => `${point.x},${point.y}`)
+                        .join(' ')}
+                    />
+                  ))}
+                  {constraintLineBoundarySegments.map((segment, index) => (
+                    <polyline
+                      className={`constraint-guide-line ${segment.kind}`}
+                      key={`constraint-line-${index}`}
+                      points={segment.points
+                        .map(toSvgPoint)
+                        .map((point) => `${point.x},${point.y}`)
+                        .join(' ')}
+                    />
+                  ))}
+                </g>
               )}
               {showRobotView && (
                 <polyline
@@ -1637,6 +2523,54 @@ function App() {
                   })}
                 </g>
               )}
+              {enforceGeometryConstraint &&
+                hasConstraintViolation &&
+                showSheetView &&
+                showRobotView && (
+                  <g className="constraint-violation-lines">
+                    {constraintValidation.distanceViolations.flatMap(
+                      ({ firstIndex, secondIndex }) => {
+                        const firstRobot = robots[firstIndex]
+                        const secondRobot = robots[secondIndex]
+                        const firstSheet = sheet[firstIndex]
+                        const secondSheet = sheet[secondIndex]
+
+                        if (
+                          !firstRobot ||
+                          !secondRobot ||
+                          !firstSheet ||
+                          !secondSheet
+                        ) {
+                          return []
+                        }
+
+                        const firstRobotSvg = toSvgPoint(firstRobot)
+                        const secondRobotSvg = toSvgPoint(secondRobot)
+                        const firstSheetSvg = toSvgPoint(firstSheet)
+                        const secondSheetSvg = toSvgPoint(secondSheet)
+
+                        return [
+                          <line
+                            className="robot-side"
+                            key={`constraint-robot-${firstIndex}-${secondIndex}`}
+                            x1={firstRobotSvg.x}
+                            y1={firstRobotSvg.y}
+                            x2={secondRobotSvg.x}
+                            y2={secondRobotSvg.y}
+                          />,
+                          <line
+                            className="sheet-side"
+                            key={`constraint-sheet-${firstIndex}-${secondIndex}`}
+                            x1={firstSheetSvg.x}
+                            y1={firstSheetSvg.y}
+                            x2={secondSheetSvg.x}
+                            y2={secondSheetSvg.y}
+                          />,
+                        ]
+                      },
+                    )}
+                  </g>
+                )}
               {showTautCableSegments && (showSheetView || showRobotView) && (
                 <g className="taut-cable-lines">
                   {displayedSolutionEntries.flatMap(({ index, solution }) => {
@@ -1754,9 +2688,15 @@ function App() {
                     const svgPoint = toSvgPoint(point)
                     const active =
                       selectedKind === 'sheet' && selectedIndex === index
+                    const invalid =
+                      enforceGeometryConstraint &&
+                      violatingSheetIndexSet.has(index)
 
                     return (
-                      <g key={`sheet-${index}`}>
+                      <g
+                        className={invalid ? 'invalid-constraint-point' : ''}
+                        key={`sheet-${index}`}
+                      >
                         <circle
                           className="point-hit-target"
                           cx={svgPoint.x}
@@ -1793,9 +2733,15 @@ function App() {
                     const svgPoint = toSvgPoint(point)
                     const active =
                       selectedKind === 'robots' && selectedIndex === index
+                    const invalid =
+                      enforceGeometryConstraint &&
+                      violatingRobotIndexSet.has(index)
 
                     return (
-                      <g key={`robot-${index}`}>
+                      <g
+                        className={invalid ? 'invalid-constraint-point' : ''}
+                        key={`robot-${index}`}
+                      >
                         <circle
                           className="point-hit-target"
                           cx={svgPoint.x}

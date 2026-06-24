@@ -258,6 +258,11 @@
   color: #142124;
 }
 
+.canvas-layer-toggle.warning {
+  color: #8c252d;
+  background: #fff1f2;
+}
+
 .canvas-layer-toggle span {
   min-height: 0;
   border: 0;
@@ -277,6 +282,10 @@
   padding: 0;
   accent-color: #007d7a;
   cursor: pointer;
+}
+
+.canvas-layer-toggle.warning input {
+  accent-color: #b12d36;
 }
 
 .canvas-tools {
@@ -558,6 +567,51 @@ button:hover {
   vector-effect: non-scaling-stroke;
 }
 
+.constraint-guide-arc,
+.constraint-guide-line {
+  fill: none;
+  stroke: #007d7a;
+  stroke-dasharray: 11 7;
+  stroke-width: 2.6;
+  opacity: 0.85;
+  pointer-events: none;
+  vector-effect: non-scaling-stroke;
+  animation: constraint-dash 0.85s linear infinite;
+}
+
+.constraint-guide-arc.outside {
+  stroke: #b12d36;
+}
+
+.constraint-guide-line {
+  stroke: #4d62c7;
+}
+
+.constraint-guide-line.extension {
+  stroke-dasharray: 7 7;
+}
+
+.constraint-guides.warning .constraint-guide-arc,
+.constraint-guides.warning .constraint-guide-line,
+.coordinate-canvas.constraint-rejected .constraint-guide-arc,
+.coordinate-canvas.constraint-rejected .constraint-guide-line {
+  stroke: #b12d36;
+  animation: constraint-dash 0.42s linear infinite;
+}
+
+.constraint-violation-lines line {
+  stroke: #b12d36;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-dasharray: 8 5;
+  pointer-events: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.constraint-violation-lines line.sheet-side {
+  stroke: #007d7a;
+}
+
 .robot-polyline {
   fill: none;
   stroke: #c56a1a;
@@ -613,6 +667,15 @@ button:hover {
   stroke: #152527;
 }
 
+.invalid-constraint-point .point-marker {
+  fill: #b12d36;
+  stroke: #ffffff;
+}
+
+.invalid-constraint-point .point-marker.active {
+  stroke: #152527;
+}
+
 .sheet-points text,
 .robot-points text,
 .object-marker text {
@@ -627,6 +690,17 @@ button:hover {
   pointer-events: auto;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.sheet-points .invalid-constraint-point text,
+.robot-points .invalid-constraint-point text {
+  fill: #8c252d;
+}
+
+@keyframes constraint-dash {
+  to {
+    stroke-dashoffset: -18;
+  }
 }
 
 .object-marker text {

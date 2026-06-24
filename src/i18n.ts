@@ -37,7 +37,19 @@ export const translations = {
     },
     canvas: {
       ariaLabel: 'VVCM 坐标画布',
+      constraintConvexityWarning: '几何约束：多边形需要保持凸形',
+      constraintDistanceViolationWarning: (labels: string) =>
+        `几何约束距离违规：${labels}`,
+      constraintPairLabel: (
+        firstRobot: string,
+        secondRobot: string,
+        firstSheet: string,
+        secondSheet: string,
+      ) => `${firstRobot}-${secondRobot} > ${firstSheet}-${secondSheet}`,
+      constraintWindingWarning: '几何约束：布和机器人顶点顺序需要一致',
       fitView: '适配',
+      geometryConstraint: '几何约束',
+      geometryConstraintHint: '拖动时限制距离矩阵、凸性和顶点顺序',
       legendAriaLabel: '图例',
       robotLegend: '机器人',
       sheetLegend: '布顶点',
@@ -121,6 +133,14 @@ export const translations = {
         `点数量需要在 ${min} 到 ${max} 之间`,
       pointsApplied: (label: string, count: number) =>
         `${label}已应用，数量 ${count}`,
+      constraintDragConstrained: (label: string) =>
+        `${label} 已被几何约束限制`,
+      constraintDragRejected: (label: string) =>
+        `${label} 当前无法继续移动，需保持几何约束`,
+      constraintConvexityViolation: '几何约束已开启：多边形需要保持凸形',
+      constraintDistanceViolation: (labels: string) =>
+        `几何约束已开启：${labels}`,
+      constraintWindingViolation: '几何约束已开启：布和机器人顶点顺序需要一致',
       ready: '准备就绪',
       robotsTextSynced: '机器人文本已同步',
       sheetTextSynced: '布顶点文本已同步',
@@ -164,7 +184,22 @@ export const translations = {
     },
     canvas: {
       ariaLabel: 'VVCM coordinate canvas',
+      constraintConvexityWarning:
+        'Geometry constraint: polygons must stay convex',
+      constraintDistanceViolationWarning: (labels: string) =>
+        `Geometry distance violation: ${labels}`,
+      constraintPairLabel: (
+        firstRobot: string,
+        secondRobot: string,
+        firstSheet: string,
+        secondSheet: string,
+      ) => `${firstRobot}-${secondRobot} > ${firstSheet}-${secondSheet}`,
+      constraintWindingWarning:
+        'Geometry constraint: sheet and robot vertex order must match',
       fitView: 'Fit',
+      geometryConstraint: 'Geometry constraint',
+      geometryConstraintHint:
+        'Limit drags by pairwise distances, convexity, and vertex order',
       legendAriaLabel: 'Legend',
       robotLegend: 'Robots',
       sheetLegend: 'Sheet vertices',
@@ -248,6 +283,16 @@ export const translations = {
         `Point count must be between ${min} and ${max}`,
       pointsApplied: (label: string, count: number) =>
         `${label} applied, count ${count}`,
+      constraintDragConstrained: (label: string) =>
+        `${label} constrained by geometry`,
+      constraintDragRejected: (label: string) =>
+        `${label} cannot move further while preserving geometry`,
+      constraintConvexityViolation:
+        'Geometry constraint active: polygons must stay convex',
+      constraintDistanceViolation: (labels: string) =>
+        `Geometry constraint active: ${labels}`,
+      constraintWindingViolation:
+        'Geometry constraint active: sheet and robot vertex order must match',
       ready: 'Ready',
       robotsTextSynced: 'Robot position text synced',
       sheetTextSynced: 'Sheet vertex text synced',
