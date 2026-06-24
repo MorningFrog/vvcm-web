@@ -1428,7 +1428,7 @@ function App() {
   const [robots, setRobots] = useState<Point[]>(() =>
     makeInitialRobots(DEFAULT_ROBOT_COUNT),
   )
-  const [selectedKind, setSelectedKind] = useState<PointKind>('sheet')
+  const [selectedKind, setSelectedKind] = useState<PointKind>('robots')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [showSheetView, setShowSheetView] = useState(true)
   const [showRobotView, setShowRobotView] = useState(true)
@@ -2450,6 +2450,8 @@ function App() {
             <svg
               ref={svgRef}
               className={`coordinate-canvas ${
+                selectedKind === 'sheet' ? 'focus-sheet' : 'focus-robots'
+              } ${
                 canvasInteraction?.type === 'pan' ? 'panning' : ''
               } ${
                 canvasInteraction?.type === 'point' ? 'point-dragging' : ''

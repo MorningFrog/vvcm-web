@@ -566,10 +566,16 @@ button:hover {
 }
 
 .sheet-polygon {
-  fill: rgba(0, 125, 122, 0.16);
+  fill: rgba(0, 125, 122, 0.12);
   stroke: #007d7a;
-  stroke-width: 2.4;
+  stroke-width: 2.2;
   vector-effect: non-scaling-stroke;
+}
+
+.coordinate-canvas.focus-robots .sheet-polygon {
+  fill: rgba(0, 125, 122, 0.055);
+  stroke: rgba(0, 125, 122, 0.58);
+  stroke-width: 1.7;
 }
 
 .constraint-guide-arc,
@@ -625,6 +631,16 @@ button:hover {
   vector-effect: non-scaling-stroke;
 }
 
+.coordinate-canvas.focus-robots .robot-polyline {
+  stroke: #c56a1a;
+  stroke-dasharray: none;
+  stroke-width: 3.1;
+}
+
+.coordinate-canvas.focus-sheet .robot-polyline {
+  opacity: 0.78;
+}
+
 .cable-lines line {
   stroke: rgba(74, 91, 93, 0.4);
   stroke-width: 1.6;
@@ -667,6 +683,19 @@ button:hover {
   fill: #c56a1a;
 }
 
+.coordinate-canvas.focus-robots .sheet-points .point-marker {
+  fill: rgba(0, 125, 122, 0.62);
+  stroke-width: 2;
+}
+
+.coordinate-canvas.focus-robots .robot-points .point-marker {
+  stroke-width: 3.4;
+}
+
+.coordinate-canvas.focus-sheet .robot-points .point-marker {
+  fill: rgba(197, 106, 26, 0.8);
+}
+
 .sheet-points .point-marker.active,
 .robot-points .point-marker.active {
   stroke: #152527;
@@ -695,6 +724,24 @@ button:hover {
   pointer-events: auto;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.coordinate-canvas.focus-robots .sheet-points text {
+  fill: rgba(26, 37, 40, 0.62);
+  font-weight: 720;
+}
+
+.coordinate-canvas.focus-robots .robot-points text {
+  fill: #142225;
+  font-weight: 860;
+}
+
+.coordinate-canvas.focus-sheet .robot-points text {
+  fill: rgba(26, 37, 40, 0.74);
+}
+
+.coordinate-canvas.focus-robots .object-marker.virtual {
+  opacity: 0.62;
 }
 
 .sheet-points .invalid-constraint-point text,
