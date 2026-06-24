@@ -187,6 +187,7 @@ const INDEX_BASE_STORAGE_KEY = 'vvcm-web.index-base.v1'
 const EMPTY_SOLUTIONS: FkSolutionOutput[] = []
 const GITHUB_ICON_HREF = `${import.meta.env.BASE_URL}icons.svg#github-icon`
 const GEOMETRY_TOLERANCE = 1e-6
+const GEOMETRY_DRAG_MARGIN = 0.1
 const CONSTRAINT_PROJECTION_PASSES = 28
 const CONSTRAINT_ARC_SAMPLES = 192
 const CONSTRAINT_LINE_SAMPLES = 180
@@ -750,6 +751,30 @@ const makeHalfPlane = (
   value,
 })
 
+const circleConstraintRadius = (
+  constraint: CircleConstraint,
+  safetyMargin = 0,
+) =>
+  constraint.mode === 'inside'
+    ? Math.max(0, constraint.radius - safetyMargin)
+    : constraint.radius + safetyMargin
+
+const halfPlaneRequiredValue = (
+  constraint: HalfPlaneConstraint,
+  safetyMargin = 0,
+) => {
+  if (safetyMargin <= 0) {
+    return -GEOMETRY_TOLERANCE
+  }
+
+  const gradientLength = Math.hypot(
+    constraint.gradient.x,
+    constraint.gradient.y,
+  )
+
+  return gradientLength * safetyMargin
+}
+
 const activeWindingForKind = (
   kind: PointKind,
   sheet: Point[],
@@ -857,23 +882,25 @@ const buildConvexityConstraints = (
 const projectToCircleConstraint = (
   point: Point,
   constraint: CircleConstraint,
+  safetyMargin = GEOMETRY_DRAG_MARGIN,
 ) => {
   const deltaX = point.x - constraint.center.x
   const deltaY = point.y - constraint.center.y
   const currentDistance = Math.hypot(deltaX, deltaY)
+  const effectiveRadius = circleConstraintRadius(constraint, safetyMargin)
   const safeDistance =
     currentDistance <= GEOMETRY_TOLERANCE ? GEOMETRY_TOLERANCE : currentDistance
 
   if (
     constraint.mode === 'inside' &&
-    currentDistance <= constraint.radius + GEOMETRY_TOLERANCE
+    currentDistance <= effectiveRadius + GEOMETRY_TOLERANCE
   ) {
     return point
   }
 
   if (
     constraint.mode === 'outside' &&
-    currentDistance + GEOMETRY_TOLERANCE >= constraint.radius
+    currentDistance + GEOMETRY_TOLERANCE >= effectiveRadius
   ) {
     return point
   }
@@ -885,20 +912,17 @@ const projectToCircleConstraint = (
     }
 
   return {
-    x: constraint.center.x + direction.x * constraint.radius,
-    y: constraint.center.y + direction.y * constraint.radius,
+    x: constraint.center.x + direction.x * effectiveRadius,
+    y: constraint.center.y + direction.y * effectiveRadius,
   }
 }
 
 const projectToHalfPlaneConstraint = (
   point: Point,
   constraint: HalfPlaneConstraint,
+  safetyMargin = GEOMETRY_DRAG_MARGIN,
 ) => {
   const value = constraint.value(point)
-  if (value >= GEOMETRY_TOLERANCE) {
-    return point
-  }
-
   const gradientLengthSquared = squaredDistance(constraint.gradient, {
     x: 0,
     y: 0,
@@ -907,7 +931,12 @@ const projectToHalfPlaneConstraint = (
     return point
   }
 
-  const offset = (GEOMETRY_TOLERANCE - value) / gradientLengthSquared
+  const requiredValue = halfPlaneRequiredValue(constraint, safetyMargin)
+  if (value >= requiredValue) {
+    return point
+  }
+
+  const offset = (requiredValue - value) / gradientLengthSquared
   return {
     x: point.x + constraint.gradient.x * offset,
     y: point.y + constraint.gradient.y * offset,
@@ -918,15 +947,16 @@ const applyProjectionPasses = (
   start: Point,
   circleConstraints: CircleConstraint[],
   halfPlaneConstraints: HalfPlaneConstraint[],
+  safetyMargin = GEOMETRY_DRAG_MARGIN,
 ) => {
   let point = start
 
   for (let pass = 0; pass < CONSTRAINT_PROJECTION_PASSES; pass += 1) {
     circleConstraints.forEach((constraint) => {
-      point = projectToCircleConstraint(point, constraint)
+      point = projectToCircleConstraint(point, constraint, safetyMargin)
     })
     halfPlaneConstraints.forEach((constraint) => {
-      point = projectToHalfPlaneConstraint(point, constraint)
+      point = projectToHalfPlaneConstraint(point, constraint, safetyMargin)
     })
   }
 
@@ -936,25 +966,28 @@ const applyProjectionPasses = (
 const circleIntersections = (
   first: CircleConstraint,
   second: CircleConstraint,
+  safetyMargin = 0,
 ) => {
   const dx = second.center.x - first.center.x
   const dy = second.center.y - first.center.y
   const centerDistance = Math.hypot(dx, dy)
+  const firstRadius = circleConstraintRadius(first, safetyMargin)
+  const secondRadius = circleConstraintRadius(second, safetyMargin)
 
   if (
     centerDistance <= GEOMETRY_TOLERANCE ||
-    centerDistance > first.radius + second.radius + GEOMETRY_TOLERANCE ||
-    centerDistance < Math.abs(first.radius - second.radius) - GEOMETRY_TOLERANCE
+    centerDistance > firstRadius + secondRadius + GEOMETRY_TOLERANCE ||
+    centerDistance < Math.abs(firstRadius - secondRadius) - GEOMETRY_TOLERANCE
   ) {
     return []
   }
 
   const a =
-    (first.radius * first.radius -
-      second.radius * second.radius +
+    (firstRadius * firstRadius -
+      secondRadius * secondRadius +
       centerDistance * centerDistance) /
     (2 * centerDistance)
-  const heightSquared = first.radius * first.radius - a * a
+  const heightSquared = firstRadius * firstRadius - a * a
   if (heightSquared < -GEOMETRY_TOLERANCE) {
     return []
   }
@@ -987,9 +1020,17 @@ const nearestLegalGeometryPoint = (
     robots,
   )
   const isCandidateValid = (candidate: Point) =>
-    kind === 'robots'
+    isPointAllowedByConstraints(
+      candidate,
+      circleConstraints,
+      halfPlaneConstraints,
+      -1,
+      -1,
+      GEOMETRY_DRAG_MARGIN,
+    ) &&
+    (kind === 'robots'
       ? isGeometryConstraintValid(sheet, replacePoint(robots, index, candidate))
-      : isGeometryConstraintValid(replacePoint(sheet, index, candidate), robots)
+      : isGeometryConstraintValid(replacePoint(sheet, index, candidate), robots))
   const seeds: Point[] = [target, current]
 
   circleConstraints.forEach((constraint) => {
@@ -1010,6 +1051,7 @@ const nearestLegalGeometryPoint = (
         ...circleIntersections(
           circleConstraints[firstIndex],
           circleConstraints[secondIndex],
+          GEOMETRY_DRAG_MARGIN,
         ),
       )
     }
@@ -1045,12 +1087,14 @@ const nearestLegalGeometryPoint = (
 const satisfiesCircleConstraint = (
   point: Point,
   constraint: CircleConstraint,
+  safetyMargin = 0,
 ) => {
   const currentDistance = distance(point, constraint.center)
+  const effectiveRadius = circleConstraintRadius(constraint, safetyMargin)
 
   return constraint.mode === 'inside'
-    ? currentDistance <= constraint.radius + GEOMETRY_TOLERANCE
-    : currentDistance + GEOMETRY_TOLERANCE >= constraint.radius
+    ? currentDistance <= effectiveRadius + GEOMETRY_TOLERANCE
+    : currentDistance + GEOMETRY_TOLERANCE >= effectiveRadius
 }
 
 const isPointAllowedByConstraints = (
@@ -1059,16 +1103,18 @@ const isPointAllowedByConstraints = (
   halfPlaneConstraints: HalfPlaneConstraint[],
   ignoredCircleIndex = -1,
   ignoredHalfPlaneIndex = -1,
+  safetyMargin = 0,
 ) =>
   circleConstraints.every(
     (constraint, index) =>
       index === ignoredCircleIndex ||
-      satisfiesCircleConstraint(point, constraint),
+      satisfiesCircleConstraint(point, constraint, safetyMargin),
   ) &&
   halfPlaneConstraints.every(
     (constraint, index) =>
       index === ignoredHalfPlaneIndex ||
-      constraint.value(point) >= -GEOMETRY_TOLERANCE,
+      constraint.value(point) >=
+        halfPlaneRequiredValue(constraint, safetyMargin),
   )
 
 const splitBoundarySamples = (
