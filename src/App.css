@@ -872,10 +872,17 @@ button:hover {
 
 .solution-controls {
   display: grid;
-  grid-template-columns: max-content minmax(180px, 1fr);
-  gap: 12px;
-  align-items: end;
+  grid-template-columns: 1fr;
+  gap: 8px;
   margin-bottom: 12px;
+}
+
+.solution-control-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
 }
 
 .solution-mode-row {
@@ -896,6 +903,23 @@ button:hover {
 .solution-select {
   display: grid;
   gap: 5px;
+}
+
+.solution-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  gap: 7px;
+  color: #334649;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.solution-filter-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: #007d7a;
 }
 
 .solution-list {

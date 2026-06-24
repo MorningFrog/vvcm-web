@@ -1435,6 +1435,7 @@ function App() {
   const [enforceGeometryConstraint, setEnforceGeometryConstraint] =
     useState(false)
   const [constraintDragRejected, setConstraintDragRejected] = useState(false)
+  const [showStableOnly, setShowStableOnly] = useState(true)
   const [solutionDisplayMode, setSolutionDisplayMode] =
     useState<SolutionDisplayMode>('single')
   const [selectedSolutionIndex, setSelectedSolutionIndex] =
@@ -1546,18 +1547,6 @@ function App() {
 
   const allSolutions =
     solveState.status === 'ok' ? solveState.result.solutions : EMPTY_SOLUTIONS
-  const firstStableSolutionIndex = allSolutions.findIndex(
-    (solution) => solution.stable,
-  )
-  const fallbackSolutionIndex = allSolutions.length
-    ? firstStableSolutionIndex >= 0
-      ? firstStableSolutionIndex
-      : 0
-    : null
-  const activeSolutionIndex =
-    selectedSolutionIndex !== null && allSolutions[selectedSolutionIndex]
-      ? selectedSolutionIndex
-      : fallbackSolutionIndex
   const indexedSolutions = useMemo<IndexedSolution[]>(
     () =>
       allSolutions.map((solution, index) => ({
@@ -1566,17 +1555,32 @@ function App() {
       })),
     [allSolutions],
   )
+  const visibleSolutionOptions = useMemo<IndexedSolution[]>(
+    () =>
+      showStableOnly
+        ? indexedSolutions.filter(({ solution }) => solution.stable)
+        : indexedSolutions,
+    [indexedSolutions, showStableOnly],
+  )
+  const fallbackSolutionIndex = visibleSolutionOptions[0]?.index ?? null
+  const activeSolutionIndex =
+    selectedSolutionIndex !== null &&
+    visibleSolutionOptions.some(({ index }) => index === selectedSolutionIndex)
+      ? selectedSolutionIndex
+      : fallbackSolutionIndex
   const selectedSolutionEntry =
     activeSolutionIndex !== null
-      ? indexedSolutions[activeSolutionIndex] ?? null
+      ? (visibleSolutionOptions.find(
+          ({ index }) => index === activeSolutionIndex,
+        ) ?? null)
       : null
   const displayedSolutionEntries = useMemo<IndexedSolution[]>(() => {
     if (solutionDisplayMode === 'all') {
-      return indexedSolutions
+      return visibleSolutionOptions
     }
 
     return selectedSolutionEntry ? [selectedSolutionEntry] : []
-  }, [indexedSolutions, selectedSolutionEntry, solutionDisplayMode])
+  }, [selectedSolutionEntry, solutionDisplayMode, visibleSolutionOptions])
   const visibleSceneSolutions = useMemo<RobotSceneSolutionEntry[]>(
     () =>
       displayedSolutionEntries.map(({ index, solution }) => ({
@@ -2854,36 +2858,51 @@ function App() {
             {solveState.status === 'ok' ? (
               <>
                 <div className="solution-controls">
-                  <div
-                    className="mode-row solution-mode-row"
-                    role="group"
-                    aria-label={t.results.displayModeAriaLabel}
-                  >
-                    <button
-                      type="button"
-                      className={
-                        solutionDisplayMode === 'single' ? 'active' : ''
-                      }
-                      disabled={!indexedSolutions.length}
-                      onClick={() => setSolutionDisplayMode('single')}
+                  <div className="solution-control-row">
+                    <div
+                      className="mode-row solution-mode-row"
+                      role="group"
+                      aria-label={t.results.displayModeAriaLabel}
                     >
-                      {t.results.singleDisplay}
-                    </button>
-                    <button
-                      type="button"
-                      className={solutionDisplayMode === 'all' ? 'active' : ''}
-                      disabled={!indexedSolutions.length}
-                      onClick={() => setSolutionDisplayMode('all')}
-                    >
-                      {t.results.allDisplay}
-                    </button>
+                      <button
+                        type="button"
+                        className={
+                          solutionDisplayMode === 'single' ? 'active' : ''
+                        }
+                        disabled={!visibleSolutionOptions.length}
+                        onClick={() => setSolutionDisplayMode('single')}
+                      >
+                        {t.results.singleDisplay}
+                      </button>
+                      <button
+                        type="button"
+                        className={
+                          solutionDisplayMode === 'all' ? 'active' : ''
+                        }
+                        disabled={!visibleSolutionOptions.length}
+                        onClick={() => setSolutionDisplayMode('all')}
+                      >
+                        {t.results.allDisplay}
+                      </button>
+                    </div>
+                    <label className="solution-filter-toggle">
+                      <input
+                        type="checkbox"
+                        aria-label={t.results.stableOnlyFilter}
+                        checked={showStableOnly}
+                        onChange={(event) =>
+                          setShowStableOnly(event.currentTarget.checked)
+                        }
+                      />
+                      <span>{t.results.stableOnlyFilter}</span>
+                    </label>
                   </div>
                   <label className="solution-select">
                     <span>{t.results.selectedSolutionLabel}</span>
                     <select
                       value={activeSolutionIndex ?? ''}
                       disabled={
-                        !indexedSolutions.length ||
+                        !visibleSolutionOptions.length ||
                         solutionDisplayMode === 'all'
                       }
                       onChange={(event) =>
@@ -2892,7 +2911,7 @@ function App() {
                         )
                       }
                     >
-                      {indexedSolutions.map(({ index, solution }) => {
+                      {visibleSolutionOptions.map(({ index, solution }) => {
                         const stateLabel = solution.stable
                           ? t.results.stableBadge
                           : t.results.unstableBadge
@@ -2910,8 +2929,8 @@ function App() {
                   </label>
                 </div>
                 <div className="solution-list">
-                  {indexedSolutions.length ? (
-                    indexedSolutions.map(({ index, solution }) => {
+                  {visibleSolutionOptions.length ? (
+                    visibleSolutionOptions.map(({ index, solution }) => {
                       const stateLabel = solution.stable
                         ? t.results.stableBadge
                         : t.results.unstableBadge
